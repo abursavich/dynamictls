@@ -27,13 +27,24 @@ func (noopLogger) Errorf(format string, args ...interface{}) {}
 type Option func(*option) error
 
 type option struct {
+	usages []x509.ExtKeyUsage
 	prefix string
 	logger ErrorLogger
+}
+
+// WithKeyUsages returns an Option that specifies the
+// key usages for certificate verification.
+func WithKeyUsages(usages ...x509.ExtKeyUsage) Option {
+	return func(o *option) error {
+		o.usages = usages
+		return nil
+	}
 }
 
 // WithPrefix returns an Option that sets a prefix on the metric names.
 func WithPrefix(s string) Option {
 	return func(o *option) error {
+		// TODO: validate prefix
 		o.prefix = strings.TrimRight(s, "_")
 		return nil
 	}
@@ -53,12 +64,14 @@ type Metrics struct {
 	verifyError prometheus.Gauge
 	expiration  prometheus.Gauge
 
+	usages []x509.ExtKeyUsage
 	logger ErrorLogger
 }
 
 // NewMetrics returns new Metrics with the given options.
 func NewMetrics(options ...Option) (*Metrics, error) {
 	o := &option{
+		usages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 		logger: &noopLogger{},
 	}
 	for _, fn := range options {
@@ -82,6 +95,7 @@ func NewMetrics(options ...Option) (*Metrics, error) {
 			Name:      "tls_config_earliest_certificate_expiration_time_seconds",
 			Help:      "Earliest expiration time of the TLS configuration's certificates in seconds since the Unix epoch.",
 		}),
+		usages: o.usages,
 		logger: o.logger,
 	}
 	return m, nil
@@ -133,7 +147,7 @@ func (m *Metrics) earliestExpiration(cfg *tls.Config) (time.Time, error) {
 		}
 		chains, err := x509Cert.Verify(x509.VerifyOptions{
 			Roots:     cfg.RootCAs,
-			KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+			KeyUsages: m.usages,
 		})
 		if err != nil {
 			m.logger.Errorf("tlsprom: cert verification error: %v", err)
