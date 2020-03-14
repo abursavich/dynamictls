@@ -4,3 +4,53 @@
 [![GoReportCard](https://goreportcard.com/badge/github.com/abursavich/dynamictls)](https://goreportcard.com/report/github.com/abursavich/dynamictls)
 
 DynamicTLS watches the filesystem and updates TLS configuration when certificate changes occur.
+
+## Examples
+
+### HTTP Server
+
+```go
+cfg, err := dynamictls.NewConfig(
+    dynamictls.WithBase(&tls.Config{
+        ClientAuth: tls.RequireAndVerifyClientCert,
+        MinVersion: tls.VersionTLS12,
+    }),
+    dynamictls.WithCertificate(certFile, keyFile),
+    dynamictls.WithClientCAs(clientCAsFile),
+    dynamictls.WithHTTP(),
+)
+if err != nil {
+    log.Fatal(err)
+}
+defer cfg.Close()
+
+lis, err := cfg.Listen(context.Background(), "tcp", addr)
+if err != nil {
+    log.Fatal(err)
+}
+log.Fatal(http.Serve(lis, mux))
+```
+
+### HTTP Client
+
+```go
+cfg, err := dynamictls.NewConfig(
+    dynamictls.WithBase(&tls.Config{
+        MinVersion: tls.VersionTLS12,
+    }),
+    dynamictls.WithCertificate(certFile, keyFile),
+    dynamictls.WithRootCAs(rootCAsFile),
+    dynamictls.WithHTTP(),
+)
+if err != nil {
+    log.Fatal(err)
+}
+defer cfg.Close()
+
+client := &http.Client{
+    Transport: &http.Transport{
+        DialTLSContext: cfg.Dial,
+    },
+}
+makeRequests(client)
+```
