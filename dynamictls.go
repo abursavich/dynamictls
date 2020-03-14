@@ -15,10 +15,11 @@ import (
 	"io/ioutil"
 	"net"
 	"path/filepath"
+	"sort"
 	"sync"
 	"sync/atomic"
 
-	"github.com/abursavich/dynamictls/internal/syscallconn"
+	"github.com/abursavich/dynamictls/internal/http2"
 	fsnotify "gopkg.in/fsnotify.v1"
 )
 
@@ -38,38 +39,73 @@ func (noopLogger) Errorf(format string, args ...interface{}) {}
 type NotifyFunc func(cfg *tls.Config, err error)
 
 // An Option applies optional configuration.
-type Option func(*Config) error
+type Option interface {
+	apply(*Config) error
+	weight() int
+}
+
+type option struct {
+	fn func(*Config) error
+	w  int
+}
+
+func optionFunc(fn func(*Config) error) Option {
+	return option{fn: fn}
+}
+
+func weightedOptionFunc(weight int, fn func(*Config) error) Option {
+	return option{fn: fn, w: weight}
+}
+
+func (o option) apply(c *Config) error { return o.fn(c) }
+func (o option) weight() int           { return o.w }
+
+type byWeight []Option
+
+func (s byWeight) Len() int           { return len(s) }
+func (s byWeight) Less(i, k int) bool { return s[i].weight() < s[k].weight() }
+func (s byWeight) Swap(i, k int)      { s[i], s[k] = s[k], s[i] }
+
+func sortedOptions(options []Option) []Option {
+	if sort.IsSorted(byWeight(options)) {
+		return options
+	}
+	// sort a copy
+	options = append(make([]Option, 0, len(options)), options...)
+	sort.Stable(byWeight(options))
+	return options
+}
 
 // WithBase returns an Option that sets a base TLS config.
 func WithBase(config *tls.Config) Option {
-	return func(c *Config) error {
-		c.base = config
+	return optionFunc(func(c *Config) error {
+		c.base = config.Clone()
 		return nil
-	}
+	})
 }
 
-// WithRootCAs returns an Option that adds the certificates in the
-// file to the config's root certificate pool.
+// WithRootCAs returns an Option that adds the certificates
+// in the file to the config's root certificate pool.
 func WithRootCAs(file string) Option {
-	return func(c *Config) error {
+	return optionFunc(func(c *Config) error {
 		c.rootCAs = append(c.rootCAs, file)
 		return c.addWatch(file)
-	}
+	})
 }
 
-// WithClientCAs returns an Option that adds the certificates in the
-// file to the config's client certificate pool.
+// WithClientCAs returns an Option that adds the certificates
+// in the file to the config's client certificate pool.
 func WithClientCAs(file string) Option {
-	return func(c *Config) error {
+	return optionFunc(func(c *Config) error {
 		c.clientCAs = append(c.clientCAs, file)
 		return c.addWatch(file)
-	}
+	})
 }
 
-// WithCertificate returns an Option that adds the public/private key pair
-// in the PEM encoded files to the config's certificates.
+// WithCertificate returns an Option that adds the public/private
+// key pair in the PEM encoded files to the config's certificates.
 func WithCertificate(certFile, keyFile string) Option {
-	return func(c *Config) error {
+	return optionFunc(func(c *Config) error {
 		c.certs = append(c.certs, keyPair{
 			certFile: certFile,
 			keyFile:  keyFile,
@@ -78,23 +114,63 @@ func WithCertificate(certFile, keyFile string) Option {
 			return err
 		}
 		return c.addWatch(keyFile)
-	}
+	})
 }
 
 // WithNotifyFunc returns an Option that registers the notify function.
 func WithNotifyFunc(notify NotifyFunc) Option {
-	return func(c *Config) error {
+	return optionFunc(func(c *Config) error {
 		c.notifyFns = append(c.notifyFns, notify)
 		return nil
-	}
+	})
 }
 
 // WithErrorLogger returns an Option that sets the logger for errors.
 func WithErrorLogger(logger ErrorLogger) Option {
-	return func(c *Config) error {
+	return optionFunc(func(c *Config) error {
 		c.errLog = logger
 		return nil
+	})
+}
+
+// WithHTTP returns an Option that adds HTTP/2 and HTTP/1.1
+// protocol negotiation to the config.
+func WithHTTP() Option {
+	// N.B: weight must be higher than WithBase
+	return weightedOptionFunc(1, func(c *Config) error {
+		if err := withHTTP2(c); err != nil {
+			return err
+		}
+		return withHTTP1(c)
+	})
+}
+
+// WithHTTP2 returns an Option that adds HTTP/2
+// protocol negotiation to the config.
+func WithHTTP2() Option {
+	// N.B: weight must be higher than WithBase
+	return weightedOptionFunc(1, withHTTP2)
+}
+
+// WithHTTP1 returns an Option that adds HTTP/1.1
+// protocol negotiation to the config.
+func WithHTTP1() Option {
+	// N.B: weight must be higher than WithHTTP2
+	return weightedOptionFunc(2, withHTTP1)
+}
+
+func withHTTP2(c *Config) error {
+	if err := http2.ValidateCipherSuites(c.base); err != nil {
+		return err
 	}
+	c.base.NextProtos = http2.AppendProto(c.base.NextProtos, http2.ProtoHTTP2)
+	c.base.PreferServerCipherSuites = true
+	return nil
+}
+
+func withHTTP1(c *Config) error {
+	c.base.NextProtos = http2.AppendProto(c.base.NextProtos, http2.ProtoHTTP1)
+	return nil
 }
 
 type result struct {
@@ -141,8 +217,8 @@ func NewConfig(options ...Option) (cfg *Config, err error) {
 		watcher: w,
 		done:    make(chan struct{}),
 	}
-	for _, fn := range options {
-		if err := fn(cfg); err != nil {
+	for _, o := range sortedOptions(options) {
+		if err := o.apply(cfg); err != nil {
 			return nil, err
 		}
 	}
@@ -210,7 +286,7 @@ func (cfg *Config) Dial(ctx context.Context, network, address string) (net.Conn,
 		rawConn.Close()
 		return nil, err
 	}
-	return syscallconn.Wrap(rawConn, tlsConn), err
+	return tlsConn, nil
 }
 
 func (cfg *Config) read() error {
@@ -342,6 +418,5 @@ func (lis *listener) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	tlsConn := tls.Server(rawConn, lis.cfg.Config())
-	return syscallconn.Wrap(rawConn, tlsConn), nil
+	return tls.Server(rawConn, lis.cfg.Config()), nil
 }

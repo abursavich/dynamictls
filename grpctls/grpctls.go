@@ -9,21 +9,26 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
+	"syscall"
 
 	"github.com/abursavich/dynamictls"
-	"github.com/abursavich/dynamictls/internal/syscallconn"
+	"github.com/abursavich/dynamictls/internal/http2"
 	"google.golang.org/grpc/credentials"
 )
 
 // NewCredentials returns gRPC transport credentials based on the given
 // dynamic TLS config.
-func NewCredentials(config *dynamictls.Config) credentials.TransportCredentials {
+func NewCredentials(config *dynamictls.Config) (credentials.TransportCredentials, error) {
 	cfg := config.Config()
-	return &creds{
+	if err := http2.ValidateCipherSuites(cfg); err != nil {
+		return nil, err
+	}
+	crd := &creds{
 		cfg:        config,
 		serverName: cfg.ServerName,
-		nextProtos: appendH2ToNextProtos(cfg.NextProtos),
+		nextProtos: http2.AppendProto(cfg.NextProtos, http2.ProtoHTTP2),
 	}
+	return crd, nil
 }
 
 type creds struct {
@@ -79,7 +84,7 @@ func (c *creds) ClientHandshake(ctx context.Context, authority string, rawConn n
 			SecurityLevel: credentials.PrivacyAndIntegrity,
 		},
 	}
-	return syscallconn.Wrap(rawConn, conn), info, nil
+	return wrapSyscallConn(rawConn, conn), info, nil
 }
 
 func (c *creds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -95,7 +100,7 @@ func (c *creds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInf
 			SecurityLevel: credentials.PrivacyAndIntegrity,
 		},
 	}
-	return syscallconn.Wrap(rawConn, conn), info, nil
+	return wrapSyscallConn(rawConn, conn), info, nil
 }
 
 func (c *creds) Info() credentials.ProtocolInfo {
@@ -120,12 +125,22 @@ func (c *creds) OverrideServerName(serverName string) error {
 	return nil
 }
 
-func appendH2ToNextProtos(s []string) []string {
-	const h2Proto = "h2"
-	for _, p := range s {
-		if p == h2Proto {
-			return s
-		}
+type sysConn = syscall.Conn
+
+type tlsSysConn struct {
+	*tls.Conn
+	sysConn // alias is required because embedded field names syscall.Conn and tls.Conn collide
+}
+
+// wrapSyscallConn tries to wrap rawConn and tlsConn into a net.Conn that implements syscall.Conn.
+// rawConn will be used to support syscall and tlsConn will be used for read/write.
+func wrapSyscallConn(rawConn net.Conn, tlsConn *tls.Conn) net.Conn {
+	sysConn, ok := rawConn.(syscall.Conn)
+	if !ok {
+		return tlsConn
 	}
-	return append(append(make([]string, 0, len(s)+1), s...), h2Proto)
+	return &tlsSysConn{
+		Conn:    tlsConn,
+		sysConn: sysConn,
+	}
 }
