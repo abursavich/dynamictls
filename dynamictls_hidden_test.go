@@ -5,6 +5,7 @@
 package dynamictls_test
 
 import (
+	"log"
 	"net/http"
 )
 
@@ -21,3 +22,9 @@ var (
 )
 
 func makeRequests(*http.Client) {}
+
+func check(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
+}

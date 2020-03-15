@@ -12,41 +12,31 @@ It provides easy integrations with HTTP/1.1, HTTP/2, gRPC, and Prometheus.
 ### HTTP Server
 
 ```go
-metrics, err := tlsprom.NewMetrics(
+tlsMetrics, err := tlsprom.NewMetrics(
     tlsprom.WithHTTP(),
     tlsprom.WithServer(),
 )
-if err != nil {
-    log.Fatal(err)
-}
+check(err)
 cfg, err := dynamictls.NewConfig(
-    dynamictls.WithBase(&tls.Config{
-        ClientAuth: tls.RequireAndVerifyClientCert,
-        MinVersion: tls.VersionTLS12,
-    }),
     dynamictls.WithCertificate(primaryCertFile, primaryKeyFile),
     dynamictls.WithCertificate(secondaryCertFile, secondaryKeyFile),
-    dynamictls.WithRootCAs(rootCAsFile),
-    dynamictls.WithClientCAs(clientCAsFile),
-    dynamictls.WithNotifyFunc(metrics.Update),
+    dynamictls.WithRootCAs(caFile),
+    dynamictls.WithNotifyFunc(tlsMetrics.Update),
     dynamictls.WithHTTP(),
 )
-if err != nil {
-    log.Fatal(err)
-}
+check(err)
 defer cfg.Close()
 
-lis, err := cfg.Listen(context.Background(), "tcp", addr)
-if err != nil {
-    log.Fatal(err)
-}
 reg := prometheus.NewRegistry()
-reg.MustRegister(metrics)
+reg.MustRegister(tlsMetrics)
 reg.MustRegister(prometheus.NewBuildInfoCollector())
-reg.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 reg.MustRegister(prometheus.NewGoCollector())
+mux := http.NewServeMux()
 mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
-log.Fatal(http.Serve(lis, mux))
+
+lis, err := cfg.Listen(context.Background(), "tcp", addr)
+check(err)
+check(http.Serve(lis, mux))
 ```
 
 ### HTTP Client
@@ -60,9 +50,7 @@ cfg, err := dynamictls.NewConfig(
     dynamictls.WithRootCAs(caFile),
     dynamictls.WithHTTP(),
 )
-if err != nil {
-    log.Fatal(err)
-}
+check(err)
 defer cfg.Close()
 
 client := &http.Client{
@@ -72,4 +60,42 @@ client := &http.Client{
 }
 defer client.CloseIdleConnections()
 makeRequests(client)
+```
+
+### gRPC Server
+
+```go
+tlsMetrics, err := tlsprom.NewMetrics(
+    tlsprom.WithGRPC(),
+    tlsprom.WithServer(),
+)
+check(err)
+cfg, err := dynamictls.NewConfig(
+    dynamictls.WithBase(&tls.Config{
+        ClientAuth: tls.RequireAndVerifyClientCert,
+    }),
+    dynamictls.WithCertificate(certFile, keyFile),
+    dynamictls.WithRootCAs(caFile),
+    dynamictls.WithClientCAs(caFile),
+    dynamictls.WithNotifyFunc(tlsMetrics.Update),
+)
+check(err)
+defer cfg.Close()
+
+creds, err := grpctls.NewCredentials(cfg)
+check(err)
+srv := grpc.NewServer(grpc.Creds(creds))
+pb.RegisterFooServer(srv, &fooServer{})
+
+reg := prometheus.NewRegistry()
+reg.MustRegister(tlsMetrics)
+reg.MustRegister(prometheus.NewBuildInfoCollector())
+reg.MustRegister(prometheus.NewGoCollector())
+mux := http.NewServeMux()
+mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+go func() { check(http.ListenAndServe(httpAddr, mux)) }()
+
+lis, err := net.Listen("tcp", grpcAddr)
+check(err)
+check(srv.Serve(lis))
 ```

@@ -17,41 +17,31 @@ import (
 )
 
 func ExampleConfig_Listen() {
-	metrics, err := tlsprom.NewMetrics(
+	tlsMetrics, err := tlsprom.NewMetrics(
 		tlsprom.WithHTTP(),
 		tlsprom.WithServer(),
 	)
-	if err != nil {
-		log.Fatal(err)
-	}
+	check(err)
 	cfg, err := dynamictls.NewConfig(
-		dynamictls.WithBase(&tls.Config{
-			ClientAuth: tls.RequireAndVerifyClientCert,
-			MinVersion: tls.VersionTLS12,
-		}),
 		dynamictls.WithCertificate(primaryCertFile, primaryKeyFile),
 		dynamictls.WithCertificate(secondaryCertFile, secondaryKeyFile),
-		dynamictls.WithRootCAs(rootCAsFile),
-		dynamictls.WithClientCAs(clientCAsFile),
-		dynamictls.WithNotifyFunc(metrics.Update),
+		dynamictls.WithRootCAs(caFile),
+		dynamictls.WithNotifyFunc(tlsMetrics.Update),
 		dynamictls.WithHTTP(),
 	)
-	if err != nil {
-		log.Fatal(err)
-	}
+	check(err)
 	defer cfg.Close()
 
-	lis, err := cfg.Listen(context.Background(), "tcp", addr)
-	if err != nil {
-		log.Fatal(err)
-	}
 	reg := prometheus.NewRegistry()
-	reg.MustRegister(metrics)
+	reg.MustRegister(tlsMetrics)
 	reg.MustRegister(prometheus.NewBuildInfoCollector())
-	reg.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 	reg.MustRegister(prometheus.NewGoCollector())
+	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
-	log.Fatal(http.Serve(lis, mux))
+
+	lis, err := cfg.Listen(context.Background(), "tcp", addr)
+	check(err)
+	check(http.Serve(lis, mux))
 }
 
 func ExampleConfig_Dial() {
