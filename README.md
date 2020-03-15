@@ -5,6 +5,8 @@
 
 DynamicTLS watches the filesystem and updates TLS configuration when certificate changes occur.
 
+It provides easy integrations with HTTP/1.1, HTTP/2, gRPC, and Prometheus.
+
 ## Examples
 
 ### HTTP Server
