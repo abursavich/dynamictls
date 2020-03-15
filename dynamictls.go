@@ -173,11 +173,6 @@ func withHTTP1(c *Config) error {
 	return nil
 }
 
-type result struct {
-	cfg *tls.Config
-	err error
-}
-
 type keyPair struct {
 	certFile, keyFile string
 }
