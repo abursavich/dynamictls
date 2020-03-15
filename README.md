@@ -22,7 +22,7 @@ cfg, err := dynamictls.NewConfig(
     dynamictls.WithCertificate(secondaryCertFile, secondaryKeyFile),
     dynamictls.WithRootCAs(caFile),
     dynamictls.WithNotifyFunc(tlsMetrics.Update),
-    dynamictls.WithHTTP(),
+    dynamictls.WithHTTP(), // adds HTTP/2 and HTTP/1.1 protocols
 )
 check(err)
 defer cfg.Close()
@@ -48,14 +48,15 @@ cfg, err := dynamictls.NewConfig(
     }),
     dynamictls.WithCertificate(certFile, keyFile),
     dynamictls.WithRootCAs(caFile),
-    dynamictls.WithHTTP(),
+    dynamictls.WithHTTP(), // adds HTTP/2 and HTTP/1.1 protocols
 )
 check(err)
 defer cfg.Close()
 
 client := &http.Client{
     Transport: &http.Transport{
-        DialTLSContext: cfg.Dial,
+        DialTLSContext:    cfg.Dial,
+        ForceAttemptHTTP2: true, // required if using a custom dialer with HTTP/2
     },
 }
 defer client.CloseIdleConnections()
@@ -97,5 +98,5 @@ go func() { check(http.ListenAndServe(httpAddr, mux)) }()
 
 lis, err := net.Listen("tcp", grpcAddr)
 check(err)
-check(srv.Serve(lis))
+check(srv.Serve(lis)) // gRPC server uses plain TCP listener
 ```

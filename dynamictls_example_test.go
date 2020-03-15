@@ -7,7 +7,6 @@ package dynamictls_test
 import (
 	"context"
 	"crypto/tls"
-	"log"
 	"net/http"
 
 	"github.com/abursavich/dynamictls"
@@ -27,7 +26,7 @@ func ExampleConfig_Listen() {
 		dynamictls.WithCertificate(secondaryCertFile, secondaryKeyFile),
 		dynamictls.WithRootCAs(caFile),
 		dynamictls.WithNotifyFunc(tlsMetrics.Update),
-		dynamictls.WithHTTP(),
+		dynamictls.WithHTTP(), // adds HTTP/2 and HTTP/1.1 protocols
 	)
 	check(err)
 	defer cfg.Close()
@@ -51,16 +50,15 @@ func ExampleConfig_Dial() {
 		}),
 		dynamictls.WithCertificate(certFile, keyFile),
 		dynamictls.WithRootCAs(caFile),
-		dynamictls.WithHTTP(),
+		dynamictls.WithHTTP(), // adds HTTP/2 and HTTP/1.1 protocols
 	)
-	if err != nil {
-		log.Fatal(err)
-	}
+	check(err)
 	defer cfg.Close()
 
 	client := &http.Client{
 		Transport: &http.Transport{
-			DialTLSContext: cfg.Dial,
+			DialTLSContext:    cfg.Dial,
+			ForceAttemptHTTP2: true, // required if using a custom dialer with HTTP/2
 		},
 	}
 	defer client.CloseIdleConnections()

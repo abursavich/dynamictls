@@ -10,15 +10,12 @@ import (
 )
 
 var (
-	certFile, keyFile, caFile string
+	addr string
 
+	certFile, keyFile, caFile           string
 	primaryCertFile, primaryKeyFile     string
 	secondaryCertFile, secondaryKeyFile string
-
-	rootCAsFile, clientCAsFile string
-
-	addr string
-	mux  = http.NewServeMux()
+	rootCAsFile, clientCAsFile          string
 )
 
 func makeRequests(*http.Client) {}

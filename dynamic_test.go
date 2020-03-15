@@ -6,7 +6,11 @@ package dynamictls
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"fmt"
 	"io/ioutil"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -67,7 +71,7 @@ func TestKubernetes(t *testing.T) {
 		select {
 		case res := <-ch:
 			if res.err != nil {
-				t.Fatalf("Unexpected error: %v", err)
+				t.Fatalf("Unexpected error: %v", res.err)
 			}
 			if res.config == nil {
 				t.Fatal("Config missing")
@@ -110,12 +114,115 @@ func TestKubernetes(t *testing.T) {
 	wantCert(cert1)
 }
 
+func TestMTLS(t *testing.T) {
+	// create temp dir
+	dir, err := ioutil.TempDir("", "")
+	check(t, "Failed to create directory", err)
+	defer os.RemoveAll(dir)
+
+	// create certificate authority
+	ca, caCertPEM, _, err := tlstest.GenerateCert(nil)
+	check(t, "Failed to create CA", err)
+	caFile := createFile(t, dir, "certs.pem", caCertPEM)
+
+	// create server config
+	lis, err := net.Listen("tcp", "localhost:0")
+	check(t, "Failed to create listener", err)
+	defer lis.Close()
+	_, port, err := net.SplitHostPort(lis.Addr().String())
+	check(t, "Failed to get listen port", err)
+	addr := "localhost:" + port
+	_, serverCertPEM, serverKeyPEM, err := tlstest.GenerateCert(&tlstest.CertOptions{
+		Template: &x509.Certificate{
+			KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageDataEncipherment,
+			ExtKeyUsage: []x509.ExtKeyUsage{
+				x509.ExtKeyUsageClientAuth,
+				x509.ExtKeyUsageServerAuth,
+			},
+			DNSNames: []string{"localhost", addr},
+		},
+		Parent: ca,
+	})
+	check(t, "Failed to create server certificate", err)
+	serverCfg, err := NewConfig(
+		WithBase(&tls.Config{
+			ClientAuth: tls.RequireAndVerifyClientCert,
+		}),
+		WithCertificate(
+			createFile(t, dir, "server.crt", serverCertPEM),
+			createFile(t, dir, "server.key", serverKeyPEM),
+		),
+		WithRootCAs(caFile),
+		WithClientCAs(caFile),
+		WithErrorLogger(t),
+		WithHTTP(),
+	)
+	check(t, "Failed to create server TLS config", err)
+	defer serverCfg.Close()
+
+	// create client config
+	_, clientCertPEM, clientKeyPEM, err := tlstest.GenerateCert(&tlstest.CertOptions{
+		Template: &x509.Certificate{
+			KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageDataEncipherment,
+			ExtKeyUsage: []x509.ExtKeyUsage{
+				x509.ExtKeyUsageClientAuth,
+				x509.ExtKeyUsageServerAuth, // not strictly required for clients
+			},
+		},
+		Parent: ca,
+	})
+	check(t, "Failed to create client certificate", err)
+	clientCfg, err := NewConfig(
+		WithCertificate(
+			createFile(t, dir, "client.crt", clientCertPEM),
+			createFile(t, dir, "client.key", clientKeyPEM),
+		),
+		WithRootCAs(caFile),
+		WithErrorLogger(t),
+		WithHTTP(),
+	)
+	check(t, "Failed to create client TLS config", err)
+	defer clientCfg.Close()
+
+	// create server
+	const msg = "hello, test"
+	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		fmt.Fprint(w, msg)
+	})
+	go http.Serve(NewListener(lis, serverCfg), handler)
+
+	// create client
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialTLSContext:    clientCfg.Dial,
+			ForceAttemptHTTP2: true,
+		},
+	}
+	defer client.CloseIdleConnections()
+
+	// make a request
+	resp, err := client.Get("https://" + addr)
+	check(t, "Failed HTTP request", err)
+	buf, err := ioutil.ReadAll(resp.Body)
+	check(t, "Failed reading HTTP response body", err)
+	if got := string(buf); got != msg {
+		t.Fatalf("Unexpected response; want: %q; got: %q", msg, got)
+	}
+}
+
 func createDir(t *testing.T, dir string, files map[string][]byte) {
 	t.Helper()
 	check(t, "Failed to make directory", os.Mkdir(dir, os.ModePerm))
 	for name, buf := range files {
-		check(t, "Failed to write file", ioutil.WriteFile(filepath.Join(dir, name), buf, os.ModePerm))
+		createFile(t, dir, name, buf)
 	}
+}
+
+func createFile(t *testing.T, dir, base string, buf []byte) string {
+	t.Helper()
+	path := filepath.Join(dir, base)
+	check(t, "Failed to write file", ioutil.WriteFile(path, buf, os.ModePerm))
+	return path
 }
 
 func check(t *testing.T, msg string, err error) {
