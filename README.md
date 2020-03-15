@@ -11,8 +11,8 @@ DynamicTLS watches the filesystem and updates TLS configuration when certificate
 
 ```go
 metrics, err := tlsprom.NewMetrics(
-    tlsprom.WithPrefix("http_server"),
-    tlsprom.WithKeyUsages(x509.ExtKeyUsageServerAuth),
+    tlsprom.WithHTTP(),
+    tlsprom.WithServer(),
 )
 if err != nil {
     log.Fatal(err)

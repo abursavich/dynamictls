@@ -7,7 +7,6 @@ package dynamictls_test
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"log"
 	"net/http"
 
@@ -19,8 +18,8 @@ import (
 
 func ExampleConfig_Listen() {
 	metrics, err := tlsprom.NewMetrics(
-		tlsprom.WithPrefix("http_server"),
-		tlsprom.WithKeyUsages(x509.ExtKeyUsageServerAuth),
+		tlsprom.WithHTTP(),
+		tlsprom.WithServer(),
 	)
 	if err != nil {
 		log.Fatal(err)
