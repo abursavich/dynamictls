@@ -60,7 +60,6 @@ client := &http.Client{
     },
 }
 defer client.CloseIdleConnections()
-makeRequests(client)
 ```
 
 ### gRPC Server
@@ -71,12 +70,18 @@ tlsMetrics, err := tlsprom.NewMetrics(
     tlsprom.WithServer(),
 )
 check(err)
+go serveMetrics(
+    prometheus.NewBuildInfoCollector(),
+    prometheus.NewGoCollector(),
+    tlsMetrics,
+)
+
 cfg, err := dynamictls.NewConfig(
     dynamictls.WithBase(&tls.Config{
         ClientAuth: tls.RequireAndVerifyClientCert,
     }),
     dynamictls.WithCertificate(certFile, keyFile),
-    dynamictls.WithRootCAs(caFile),
+    dynamictls.WithRootCAs(caFile), // used by metrics to verify cert expiration
     dynamictls.WithClientCAs(caFile),
     dynamictls.WithNotifyFunc(tlsMetrics.Update),
 )
@@ -85,18 +90,44 @@ defer cfg.Close()
 
 creds, err := grpctls.NewCredentials(cfg)
 check(err)
-srv := grpc.NewServer(grpc.Creds(creds))
-pb.RegisterFooServer(srv, &fooServer{})
+grpcSrv := grpc.NewServer(grpc.Creds(creds))
+pb.RegisterFooServer(grpcSrv, &fooServer{})
 
-reg := prometheus.NewRegistry()
-reg.MustRegister(tlsMetrics)
-reg.MustRegister(prometheus.NewBuildInfoCollector())
-reg.MustRegister(prometheus.NewGoCollector())
-mux := http.NewServeMux()
-mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
-go func() { check(http.ListenAndServe(httpAddr, mux)) }()
-
-lis, err := net.Listen("tcp", grpcAddr)
+lis, err := net.Listen("tcp", addr)
 check(err)
-check(srv.Serve(lis)) // gRPC server uses plain TCP listener
+check(grpcSrv.Serve(lis)) // gRPC server uses plain TCP listener
+```
+
+### gRPC Client
+
+```go
+tlsMetrics, err := tlsprom.NewMetrics(
+    tlsprom.WithGRPC(),
+    tlsprom.WithClient(),
+)
+check(err)
+go serveMetrics(
+    prometheus.NewBuildInfoCollector(),
+    prometheus.NewGoCollector(),
+    tlsMetrics,
+)
+
+cfg, err := dynamictls.NewConfig(
+    dynamictls.WithCertificate(certFile, keyFile),
+    dynamictls.WithRootCAs(caFile),
+    dynamictls.WithNotifyFunc(tlsMetrics.Update),
+)
+check(err)
+defer cfg.Close()
+
+creds, err := grpctls.NewCredentials(cfg)
+check(err)
+conn, err := grpc.Dial(addr,
+    grpc.WithTransportCredentials(creds),
+    grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
+)
+check(err)
+defer conn.Close()
+
+client := pb.NewTestServiceClient(conn)
 ```
