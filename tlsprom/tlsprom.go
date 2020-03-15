@@ -14,6 +14,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	updateErrorName = "tls_config_update_error"
+	verifyErrorName = "tls_config_certificate_verify_error"
+	expirationName  = "tls_config_earliest_certificate_expiration_time_seconds"
+)
+
 // An ErrorLogger logs errors.
 type ErrorLogger interface {
 	Errorf(format string, args ...interface{})
@@ -87,7 +93,7 @@ func WithHTTP() Option {
 // WithGRPC returns an Option that sets the namespace to "grpc".
 func WithGRPC() Option {
 	return optionFunc(func(c *config) error {
-		c.namespace = "http"
+		c.namespace = "grpc"
 		return nil
 	})
 }
@@ -162,19 +168,19 @@ func NewMetrics(options ...Option) (*Metrics, error) {
 		updateError: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: cfg.namespace,
 			Subsystem: cfg.subsystem,
-			Name:      "tls_config_update_error",
+			Name:      updateErrorName,
 			Help:      "Indicates if there was an error updating the TLS configuration.",
 		}),
 		verifyError: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: cfg.namespace,
 			Subsystem: cfg.subsystem,
-			Name:      "tls_config_certificate_verify_error",
+			Name:      verifyErrorName,
 			Help:      "Indicates if there was an error verifying the TLS configuration's certificates and expirations.",
 		}),
 		expiration: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: cfg.namespace,
 			Subsystem: cfg.subsystem,
-			Name:      "tls_config_earliest_certificate_expiration_time_seconds",
+			Name:      expirationName,
 			Help:      "Earliest expiration time of the TLS configuration's certificates in seconds since the Unix epoch.",
 		}),
 		usages: cfg.usages,
@@ -237,7 +243,7 @@ func (m *Metrics) earliestExpiration(cfg *tls.Config) (time.Time, error) {
 		}
 		for _, chain := range chains {
 			for _, cert := range chain {
-				if v := cert.NotBefore; t.IsZero() || v.Before(t) {
+				if v := cert.NotAfter; t.IsZero() || v.Before(t) {
 					t = v
 				}
 			}
