@@ -57,7 +57,10 @@ func GenerateCert(options *CertOptions) (cert *tls.Certificate, certPEMBlock, ke
 		template.NotAfter = time.Now().Add(time.Hour)
 	}
 	if len(template.ExtKeyUsage) == 0 {
-		template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+		template.ExtKeyUsage = []x509.ExtKeyUsage{
+			x509.ExtKeyUsageServerAuth,
+			x509.ExtKeyUsageClientAuth,
+		}
 	}
 	template.KeyUsage |= x509.KeyUsageKeyEncipherment
 	template.KeyUsage |= x509.KeyUsageDigitalSignature
