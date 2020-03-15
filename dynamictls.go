@@ -327,7 +327,7 @@ func (cfg *Config) read() error {
 
 	cfg.latest.Store(config)
 	for _, fn := range cfg.notifyFns {
-		fn(nil, err)
+		fn(config, nil)
 	}
 	return nil
 }
