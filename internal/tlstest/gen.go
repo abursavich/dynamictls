@@ -26,75 +26,91 @@ type CertOptions struct {
 	Curve    elliptic.Curve
 }
 
-// GenerateCert generates a certificate with the give options.
+// GenerateCert generates a certificate with the given options.
 func GenerateCert(options *CertOptions) (cert *tls.Certificate, certPEMBlock, keyPEMBlock []byte, err error) {
 	// See: https://golang.org/src/crypto/tls/generate_cert.go
 	if options == nil {
 		options = &CertOptions{}
 	}
 
-	template := options.Template
-	if template == nil {
-		template = &x509.Certificate{}
+	selfSigned := options.Parent == nil
+	template, err := certTemplate(options.Template, selfSigned)
+	if err != nil {
+		return nil, nil, nil, err
 	}
-	if template.SerialNumber == nil {
+
+	priv, err := privateKey(options.Curve)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	parent := template
+	signer := crypto.Signer(priv)
+	if !selfSigned {
+		if parent = options.Parent.Leaf; parent == nil {
+			if parent, err = x509.ParseCertificate(options.Parent.Certificate[0]); err != nil {
+				return nil, nil, nil, fmt.Errorf("parent certificate parse error: %v", err)
+			}
+		}
+		signer = options.Parent.PrivateKey.(crypto.Signer)
+	}
+
+	return generateCert(template, parent, priv, signer)
+}
+
+func certTemplate(template *x509.Certificate, selfSigned bool) (*x509.Certificate, error) {
+	var tmpl x509.Certificate
+	if template != nil {
+		tmpl = *template
+	}
+	if tmpl.SerialNumber == nil {
 		serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 		serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("serial number generation error: %v", err)
+			return nil, fmt.Errorf("serial number generation error: %v", err)
 		}
-		template.SerialNumber = serialNumber
+		tmpl.SerialNumber = serialNumber
 	}
-	if template.Subject.String() == "" {
-		template.Subject = pkix.Name{
+	if tmpl.Subject.String() == "" {
+		tmpl.Subject = pkix.Name{
 			Organization: []string{"Acme Co"},
 		}
 	}
-	if template.NotBefore.IsZero() {
-		template.NotBefore = time.Now().Add(-time.Hour)
+	if tmpl.NotBefore.IsZero() {
+		tmpl.NotBefore = time.Now().Add(-time.Hour)
 	}
-	if template.NotAfter.IsZero() {
-		template.NotAfter = time.Now().Add(time.Hour)
+	if tmpl.NotAfter.IsZero() {
+		tmpl.NotAfter = time.Now().Add(time.Hour)
 	}
-	if len(template.ExtKeyUsage) == 0 {
-		template.ExtKeyUsage = []x509.ExtKeyUsage{
+	if len(tmpl.ExtKeyUsage) == 0 {
+		tmpl.ExtKeyUsage = []x509.ExtKeyUsage{
 			x509.ExtKeyUsageServerAuth,
 			x509.ExtKeyUsageClientAuth,
 		}
 	}
-	template.KeyUsage |= x509.KeyUsageKeyEncipherment
-	template.KeyUsage |= x509.KeyUsageDigitalSignature
+	tmpl.KeyUsage |= x509.KeyUsageKeyEncipherment
+	tmpl.KeyUsage |= x509.KeyUsageDigitalSignature
+	if selfSigned {
+		tmpl.KeyUsage |= x509.KeyUsageCertSign
+		tmpl.IsCA = true
+		tmpl.BasicConstraintsValid = true
+	}
+	return &tmpl, nil
+}
 
-	curve := options.Curve
+func privateKey(curve elliptic.Curve) (*ecdsa.PrivateKey, error) {
 	if curve == nil {
 		curve = elliptic.P256()
 	}
 	priv, err := ecdsa.GenerateKey(curve, rand.Reader)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("private key generation error: %v", err)
+		return nil, fmt.Errorf("private key generation error: %v", err)
 	}
+	return priv, err
+}
 
-	var (
-		parent *x509.Certificate
-		key    crypto.Signer
-	)
-	if options.Parent != nil {
-		if parent = options.Parent.Leaf; parent == nil {
-			parent, err = x509.ParseCertificate(options.Parent.Certificate[0])
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf("parent certificate parse error: %v", err)
-			}
-		}
-		key = options.Parent.PrivateKey.(crypto.Signer)
-	} else { // self-signed
-		template.IsCA = true
-		template.KeyUsage |= x509.KeyUsageCertSign
-		template.BasicConstraintsValid = true
-		parent = template
-		key = priv
-	}
-
-	derBytes, err := x509.CreateCertificate(rand.Reader, template, parent, &priv.PublicKey, key)
+func generateCert(template, parent *x509.Certificate, priv *ecdsa.PrivateKey, signer crypto.Signer) (cert *tls.Certificate, certPEMBlock, keyPEMBlock []byte, err error) {
+	derBytes, err := x509.CreateCertificate(rand.Reader, template, parent, &priv.PublicKey, signer)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("certificate creation error: %v", err)
 	}
