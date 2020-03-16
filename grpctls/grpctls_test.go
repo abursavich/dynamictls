@@ -67,7 +67,7 @@ func TestGRPC(t *testing.T) {
 	srv := grpc.NewServer(grpc.Creds(serverCreds))
 	pb.RegisterTestServiceServer(srv, &testServiceServer{})
 	defer srv.GracefulStop()
-	go srv.Serve(lis)
+	go srv.Serve(lis) //nolint:errcheck
 
 	// create client
 	_, clientCertPEM, clientKeyPEM, err := tlstest.GenerateCert(&tlstest.CertOptions{

@@ -10,6 +10,7 @@ package http2
 // A list of the possible cipher suite ids. Taken from
 // https://www.iana.org/assignments/tls-parameters/tls-parameters.txt
 
+//nolint:unused,varcheck,deadcode
 const (
 	cipherxTLSxNULLxWITHxNULLxNULL               uint16 = 0x0000
 	cipherxTLSxRSAxWITHxNULLxMD5                 uint16 = 0x0001

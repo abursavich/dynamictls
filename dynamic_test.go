@@ -189,7 +189,7 @@ func TestMTLS(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprint(w, msg)
 	})
-	go http.Serve(NewListener(lis, serverCfg), handler)
+	go http.Serve(NewListener(lis, serverCfg), handler) //nolint:errcheck
 
 	// create client
 	client := &http.Client{

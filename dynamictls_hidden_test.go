@@ -6,7 +6,6 @@ package dynamictls_test
 
 import (
 	"log"
-	"net/http"
 )
 
 var (
@@ -15,10 +14,7 @@ var (
 	certFile, keyFile, caFile           string
 	primaryCertFile, primaryKeyFile     string
 	secondaryCertFile, secondaryKeyFile string
-	rootCAsFile, clientCAsFile          string
 )
-
-func makeRequests(*http.Client) {}
 
 func check(err error) {
 	if err != nil {
