@@ -5,49 +5,52 @@
 
 DynamicTLS watches the filesystem and updates TLS configuration when certificate changes occur.
 
-It provides easy integrations with HTTP/1.1, HTTP/2, gRPC, and Prometheus.
+It provides simple integrations with HTTP/1.1, HTTP/2, gRPC, and Prometheus.
 
 ## Examples
 
 ### HTTP Server
 
 ```go
-tlsMetrics, err := tlsprom.NewMetrics(
+metrics, err := tlsprom.NewMetrics(
     tlsprom.WithHTTP(),
     tlsprom.WithServer(),
 )
 check(err)
+prometheus.MustRegister(metrics)
+
 cfg, err := dynamictls.NewConfig(
     dynamictls.WithCertificate(primaryCertFile, primaryKeyFile),
     dynamictls.WithCertificate(secondaryCertFile, secondaryKeyFile),
     dynamictls.WithRootCAs(caFile),
-    dynamictls.WithNotifyFunc(tlsMetrics.Update),
+    dynamictls.WithNotifyFunc(metrics.Update),
     dynamictls.WithHTTP(), // adds HTTP/2 and HTTP/1.1 protocols
 )
 check(err)
 defer cfg.Close()
 
-reg := prometheus.NewRegistry()
-reg.MustRegister(tlsMetrics)
-reg.MustRegister(prometheus.NewBuildInfoCollector())
-reg.MustRegister(prometheus.NewGoCollector())
-mux := http.NewServeMux()
-mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
-
 lis, err := cfg.Listen(context.Background(), "tcp", addr)
 check(err)
-check(http.Serve(lis, mux))
+check(http.Serve(lis, http.DefaultServeMux))
 ```
 
 ### HTTP Client
 
 ```go
+metrics, err := tlsprom.NewMetrics(
+    tlsprom.WithHTTP(),
+    tlsprom.WithClient(),
+)
+check(err)
+prometheus.MustRegister(metrics)
+
 cfg, err := dynamictls.NewConfig(
     dynamictls.WithBase(&tls.Config{
         MinVersion: tls.VersionTLS12,
     }),
     dynamictls.WithCertificate(certFile, keyFile),
     dynamictls.WithRootCAs(caFile),
+    dynamictls.WithNotifyFunc(metrics.Update),
     dynamictls.WithHTTP(), // adds HTTP/2 and HTTP/1.1 protocols
 )
 check(err)
@@ -65,16 +68,12 @@ defer client.CloseIdleConnections()
 ### gRPC Server
 
 ```go
-tlsMetrics, err := tlsprom.NewMetrics(
+metrics, err := tlsprom.NewMetrics(
     tlsprom.WithGRPC(),
     tlsprom.WithServer(),
 )
 check(err)
-go serveMetrics(
-    prometheus.NewBuildInfoCollector(),
-    prometheus.NewGoCollector(),
-    tlsMetrics,
-)
+prometheus.MustRegister(metrics)
 
 cfg, err := dynamictls.NewConfig(
     dynamictls.WithBase(&tls.Config{
@@ -83,7 +82,7 @@ cfg, err := dynamictls.NewConfig(
     dynamictls.WithCertificate(certFile, keyFile),
     dynamictls.WithRootCAs(caFile), // used by metrics to verify cert expiration
     dynamictls.WithClientCAs(caFile),
-    dynamictls.WithNotifyFunc(tlsMetrics.Update),
+    dynamictls.WithNotifyFunc(metrics.Update),
 )
 check(err)
 defer cfg.Close()
@@ -101,21 +100,17 @@ check(grpcSrv.Serve(lis)) // gRPC server uses plain TCP listener
 ### gRPC Client
 
 ```go
-tlsMetrics, err := tlsprom.NewMetrics(
+metrics, err := tlsprom.NewMetrics(
     tlsprom.WithGRPC(),
     tlsprom.WithClient(),
 )
 check(err)
-go serveMetrics(
-    prometheus.NewBuildInfoCollector(),
-    prometheus.NewGoCollector(),
-    tlsMetrics,
-)
+prometheus.MustRegister(metrics)
 
 cfg, err := dynamictls.NewConfig(
     dynamictls.WithCertificate(certFile, keyFile),
     dynamictls.WithRootCAs(caFile),
-    dynamictls.WithNotifyFunc(tlsMetrics.Update),
+    dynamictls.WithNotifyFunc(metrics.Update),
 )
 check(err)
 defer cfg.Close()

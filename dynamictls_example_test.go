@@ -12,44 +12,46 @@ import (
 	"github.com/abursavich/dynamictls"
 	"github.com/abursavich/dynamictls/tlsprom"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func ExampleConfig_Listen() {
-	tlsMetrics, err := tlsprom.NewMetrics(
+	metrics, err := tlsprom.NewMetrics(
 		tlsprom.WithHTTP(),
 		tlsprom.WithServer(),
 	)
 	check(err)
+	prometheus.MustRegister(metrics)
+
 	cfg, err := dynamictls.NewConfig(
 		dynamictls.WithCertificate(primaryCertFile, primaryKeyFile),
 		dynamictls.WithCertificate(secondaryCertFile, secondaryKeyFile),
 		dynamictls.WithRootCAs(caFile),
-		dynamictls.WithNotifyFunc(tlsMetrics.Update),
+		dynamictls.WithNotifyFunc(metrics.Update),
 		dynamictls.WithHTTP(), // adds HTTP/2 and HTTP/1.1 protocols
 	)
 	check(err)
 	defer cfg.Close()
 
-	reg := prometheus.NewRegistry()
-	reg.MustRegister(tlsMetrics)
-	reg.MustRegister(prometheus.NewBuildInfoCollector())
-	reg.MustRegister(prometheus.NewGoCollector())
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
-
 	lis, err := cfg.Listen(context.Background(), "tcp", addr)
 	check(err)
-	check(http.Serve(lis, mux))
+	check(http.Serve(lis, http.DefaultServeMux))
 }
 
 func ExampleConfig_Dial() {
+	metrics, err := tlsprom.NewMetrics(
+		tlsprom.WithHTTP(),
+		tlsprom.WithClient(),
+	)
+	check(err)
+	prometheus.MustRegister(metrics)
+
 	cfg, err := dynamictls.NewConfig(
 		dynamictls.WithBase(&tls.Config{
 			MinVersion: tls.VersionTLS12,
 		}),
 		dynamictls.WithCertificate(certFile, keyFile),
 		dynamictls.WithRootCAs(caFile),
+		dynamictls.WithNotifyFunc(metrics.Update),
 		dynamictls.WithHTTP(), // adds HTTP/2 and HTTP/1.1 protocols
 	)
 	check(err)
@@ -62,5 +64,4 @@ func ExampleConfig_Dial() {
 		},
 	}
 	defer client.CloseIdleConnections()
-	makeRequests(client)
 }
