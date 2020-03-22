@@ -1,0 +1,24 @@
+dist: bionic
+
+language: go
+
+env:
+    global:
+        - GO111MODULE=on
+        - LINT_VERSION=v1.24.0
+
+go:
+    - stable
+    - tip
+
+notifications:
+    email: false
+
+before_script:
+    - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin $LINT_VERSION
+    - go install github.com/mattn/goveralls
+  
+script:
+    - golangci-lint run
+    - go test -v -race -covermode atomic -coverprofile=profile.cov ./...
+    - $GOPATH/bin/goveralls -coverprofile=profile.cov -service=travis-ci
