@@ -316,19 +316,12 @@ func (cfg *Config) read() error {
 	if rootCAs != nil {
 		config.RootCAs = rootCAs
 	}
-	if config.GetConfigForClient == nil {
-		config.GetConfigForClient = cfg.getConfigForClient
-	}
 
 	cfg.latest.Store(config)
 	for _, fn := range cfg.notifyFns {
 		fn(config, nil)
 	}
 	return nil
-}
-
-func (cfg *Config) getConfigForClient(info *tls.ClientHelloInfo) (*tls.Config, error) {
-	return cfg.latest.Load().(*tls.Config), nil
 }
 
 func (cfg *Config) watch() {
