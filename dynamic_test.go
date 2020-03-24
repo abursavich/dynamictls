@@ -68,26 +68,41 @@ func TestKubernetes(t *testing.T) {
 	}
 	wantCert := func(want *tls.Certificate) {
 		t.Helper()
-		select {
-		case res := <-ch:
-			if res.err != nil {
-				t.Fatalf("Unexpected error: %v", res.err)
+		timeout := time.NewTimer(5 * time.Second)
+		defer timeout.Stop()
+		var err error
+		for {
+			select {
+			case res := <-ch:
+				if res.err != nil {
+					// An error can occur if a filesystem event triggers a reload and a
+					// symlink flip happens between reading the public and private keys.
+					// The keys won't match due to this race, but a subsequent reload
+					// will also be triggered and they will match the next time.
+					t.Logf("Unexpected error, may be transient: %v", res.err)
+					err = res.err
+					continue
+				}
+				if res.config == nil {
+					t.Fatal("Config missing")
+				}
+				if len(res.config.Certificates) == 0 {
+					t.Fatal("Config missing certs")
+				}
+				got := res.config.Certificates[0]
+				if !reflect.DeepEqual(got.Certificate, want.Certificate) {
+					t.Fatal("Unexpected cert")
+				}
+				if !reflect.DeepEqual(got.PrivateKey, want.PrivateKey) {
+					t.Fatal("Unexpected key")
+				}
+				return // OK
+			case <-timeout.C:
+				if err != nil {
+					t.Fatalf("Unexpected error: %v", err)
+				}
+				t.Fatal("Timeout waiting for certs")
 			}
-			if res.config == nil {
-				t.Fatal("Config missing")
-			}
-			if len(res.config.Certificates) == 0 {
-				t.Fatal("Config missing certs")
-			}
-			got := res.config.Certificates[0]
-			if !reflect.DeepEqual(got.Certificate, want.Certificate) {
-				t.Fatal("Unexpected cert")
-			}
-			if !reflect.DeepEqual(got.PrivateKey, want.PrivateKey) {
-				t.Fatal("Unexpected key")
-			}
-		case <-time.After(10 * time.Second):
-			t.Fatal("Timeout waiting for certs")
 		}
 	}
 
@@ -95,7 +110,6 @@ func TestKubernetes(t *testing.T) {
 		WithCertificate(certFile, keyFile),
 		WithRootCAs(caFile),
 		WithNotifyFunc(notifyFn),
-		WithErrorLogger(t),
 	)
 	check(t, "Failed to initialize config", err)
 	defer cfg.Close()
