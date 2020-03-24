@@ -8,12 +8,39 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"sort"
 	"testing"
 	"time"
 
 	"github.com/abursavich/dynamictls/internal/tlstest"
 	"github.com/prometheus/client_golang/prometheus"
 )
+
+func TestCollector(t *testing.T) {
+	m, err := NewMetrics()
+	check(t, "Failed to create metrics", err)
+	reg := prometheus.NewRegistry()
+	check(t, "Failed to register metrics", reg.Register(m))
+	fams, err := reg.Gather()
+	check(t, "Failed to gather metrics", err)
+	names := []string{
+		updateErrorName,
+		verifyErrorName,
+		expirationName,
+	}
+	if want, got := len(names), len(fams); want != got {
+		t.Fatalf("Expected %v metrics; got: %d", want, got)
+	}
+	sort.Strings(names)
+	sort.Slice(fams, func(i, k int) bool {
+		return fams[i].GetName() < fams[k].GetName()
+	})
+	for i, want := range names {
+		if got := fams[i].GetName(); want != got {
+			t.Fatalf("Unexpected metric name; want: %v; got: %v", want, got)
+		}
+	}
+}
 
 func TestMetricNames(t *testing.T) {
 	tests := []struct {
@@ -51,6 +78,12 @@ func TestMetricNames(t *testing.T) {
 			options:   []Option{WithNamespace("foo"), WithSubsystem("bar")},
 			namespace: "foo",
 			subsystem: "bar",
+		},
+		{
+			desc:      "foo_server",
+			options:   []Option{WithNamespace("foo"), WithServer()},
+			namespace: "foo",
+			subsystem: "server",
 		},
 	}
 	for _, tt := range tests {
@@ -251,7 +284,7 @@ func TestExpiration(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			m, err := NewMetrics()
+			m, err := NewMetrics(WithErrorLogger(t))
 			check(t, "Failed to create metrics", err)
 			m.Update(tt.config, nil)
 			got := readGauge(t, m.expiration)
