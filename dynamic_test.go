@@ -18,7 +18,176 @@ import (
 	"time"
 
 	"github.com/abursavich/dynamictls/internal/tlstest"
+	"github.com/google/go-cmp/cmp"
 )
+
+func TestOptions(t *testing.T) {
+	clientCA, clientCACertPEMBlock, _, err := tlstest.GenerateCert(nil)
+	check(t, "Failed to create client CA", err)
+	rootCA, rootCACertPEMBlock, _, err := tlstest.GenerateCert(nil)
+	check(t, "Failed to create root CA", err)
+	cert, certPEMBlock, keyPEMBlock, err := tlstest.GenerateCert(&tlstest.CertOptions{Parent: rootCA})
+	check(t, "Failed to create certificate", err)
+
+	dir, err := ioutil.TempDir("", "")
+	check(t, "Failed to create directory", err)
+	defer os.RemoveAll(dir)
+
+	clientCAFile := createFile(t, dir, "clients.pem", clientCACertPEMBlock)
+	rootCAFile := createFile(t, dir, "roots.pem", rootCACertPEMBlock)
+	certFile := createFile(t, dir, "cert.pem", certPEMBlock)
+	keyFile := createFile(t, dir, "key.pem", keyPEMBlock)
+
+	certs := []tls.Certificate{*cert}
+	certOption := WithCertificate(certFile, keyFile)
+
+	clientCAs := x509.NewCertPool()
+	clientCAs.AddCert(clientCA.Leaf)
+
+	rootCAs := x509.NewCertPool()
+	rootCAs.AddCert(rootCA.Leaf)
+
+	tests := []struct {
+		desc    string
+		options []Option
+		cfg     *tls.Config
+		err     bool
+	}{
+		{
+			desc: "None",
+			err:  true,
+		},
+		{
+			desc:    "WithCertificate",
+			options: []Option{certOption},
+			cfg:     &tls.Config{Certificates: certs},
+		},
+		{
+			desc:    "WithCertificate Invalid Key Pair",
+			options: []Option{WithCertificate(rootCAFile, keyFile)},
+			err:     true,
+		},
+		{
+			desc: "WithCertificate Nonexistent Directory",
+			options: []Option{WithCertificate(
+				filepath.Join(dir, "nonexistent/cert.pem"),
+				filepath.Join(dir, "nonexistent/key.pem"),
+			)},
+			err: true,
+		},
+		{
+			desc: "WithCertificate Nonexistent Cert File",
+			options: []Option{WithCertificate(
+				filepath.Join(dir, "nonexistent-cert.pem"),
+				keyFile,
+			)},
+			err: true,
+		},
+		{
+			desc: "WithCertificate Nonexistent Key File",
+			options: []Option{WithCertificate(
+				certFile,
+				filepath.Join(dir, "nonexistent-key.pem"),
+			)},
+			err: true,
+		},
+		{
+			desc:    "WithRootCAs",
+			options: []Option{WithRootCAs(rootCAFile)},
+			cfg:     &tls.Config{RootCAs: rootCAs},
+		},
+		{
+			desc: "WithRootCAs Nonexistent Directory",
+			options: []Option{WithRootCAs(
+				filepath.Join(dir, "nonexistent/roots.pem"),
+			)},
+			err: true,
+		},
+		{
+			desc:    "WithClientCAs",
+			options: []Option{WithClientCAs(clientCAFile)},
+			cfg:     &tls.Config{ClientCAs: clientCAs},
+		},
+		{
+			desc: "WithClientCAs Nonexistent Directory",
+			options: []Option{WithClientCAs(
+				filepath.Join(dir, "nonexistent/clients.pem"),
+			)},
+			err: true,
+		},
+		{
+			desc:    "WithHTTP1",
+			options: []Option{certOption, WithHTTP1()},
+			cfg: &tls.Config{
+				Certificates: certs,
+				NextProtos:   []string{"http/1.1"},
+			},
+		},
+		{
+			desc:    "WithHTTP2",
+			options: []Option{certOption, WithHTTP2()},
+			cfg: &tls.Config{
+				Certificates: certs,
+				NextProtos:   []string{"h2"},
+			},
+		},
+		{
+			desc:    "WithHTTP1 and WithHTTP2",
+			options: []Option{certOption, WithHTTP1(), WithHTTP2()},
+			cfg: &tls.Config{
+				Certificates: certs,
+				NextProtos:   []string{"h2", "http/1.1"},
+			},
+		},
+		{
+			desc:    "WithHTTP",
+			options: []Option{certOption, WithHTTP()},
+			cfg: &tls.Config{
+				Certificates: certs,
+				NextProtos:   []string{"h2", "http/1.1"},
+			},
+		},
+		{
+			desc: "WithHTTP Invalid Ciphers",
+			options: []Option{
+				certOption,
+				WithHTTP(),
+				WithBase(&tls.Config{
+					CipherSuites: []uint16{tls.TLS_RSA_WITH_RC4_128_SHA},
+				}),
+			},
+			err: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			c, err := NewConfig(tt.options...)
+			if err != nil {
+				if tt.err {
+					return // error is expected
+				}
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if tt.err {
+				t.Fatal("Expected an error")
+			}
+			got := c.Config()
+			if !reflect.DeepEqual(tt.cfg.Certificates, got.Certificates) {
+				t.Fatal("Unexpected Certificates")
+			}
+			if !reflect.DeepEqual(tt.cfg.RootCAs, got.RootCAs) {
+				t.Fatal("Unexpected RootCAs")
+			}
+			if !reflect.DeepEqual(tt.cfg.ClientCAs, got.ClientCAs) {
+				t.Fatal("Unexpected ClientCAs")
+			}
+			if diff := cmp.Diff(tt.cfg.NextProtos, got.NextProtos); diff != "" {
+				t.Fatalf("Unexpected NextProtos:\n%s", diff)
+			}
+		})
+	}
+}
 
 func TestKubernetes(t *testing.T) {
 	// See AtomicWriter for details of secret update algorithm used by kubelet:
