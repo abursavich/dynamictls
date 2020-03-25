@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -17,6 +18,117 @@ import (
 
 	pb "google.golang.org/grpc/test/grpc_testing"
 )
+
+func TestInvalidConfig(t *testing.T) {
+	// create temp dir
+	dir, err := ioutil.TempDir("", "")
+	check(t, "Failed to create directory", err)
+	defer os.RemoveAll(dir)
+
+	// create certificate authority
+	_, caCertPEM, _, err := tlstest.GenerateCert(nil)
+	check(t, "Failed to create CA", err)
+	caFile := createFile(t, dir, "certs.pem", caCertPEM)
+
+	// create config
+	cfg, err := dynamictls.NewConfig(
+		dynamictls.WithBase(&tls.Config{
+			CipherSuites: []uint16{tls.TLS_RSA_WITH_RC4_128_SHA},
+		}),
+		dynamictls.WithClientCAs(caFile),
+		dynamictls.WithErrorLogger(t),
+	)
+	check(t, "Failed to create dynamic TLS config", err)
+	defer cfg.Close()
+
+	if _, err := NewCredentials(cfg); err == nil {
+		t.Fatal("Expected an error")
+	}
+}
+
+func TestHandshakeErrors(t *testing.T) {
+	// create temp dir
+	dir, err := ioutil.TempDir("", "")
+	check(t, "Failed to create directory", err)
+	defer os.RemoveAll(dir)
+
+	// create certificates
+	ca, caCertPEM, _, err := tlstest.GenerateCert(nil)
+	check(t, "Failed to create CA", err)
+	caFile := createFile(t, dir, "roots.pem", caCertPEM)
+	_, certPEM, keyPEM, err := tlstest.GenerateCert(&tlstest.CertOptions{
+		Template: &x509.Certificate{
+			KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageDataEncipherment,
+			ExtKeyUsage: []x509.ExtKeyUsage{
+				x509.ExtKeyUsageClientAuth,
+				x509.ExtKeyUsageServerAuth,
+			},
+		},
+		Parent: ca,
+	})
+	check(t, "Failed to create certificate", err)
+	certFile := createFile(t, dir, "cert.pem", certPEM)
+	keyFile := createFile(t, dir, "key.pem", keyPEM)
+
+	// create config
+	cfg, err := dynamictls.NewConfig(
+		dynamictls.WithBase(&tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}),
+		dynamictls.WithHTTP2(),
+		dynamictls.WithCertificate(certFile, keyFile),
+		dynamictls.WithRootCAs(caFile),
+		dynamictls.WithErrorLogger(t),
+	)
+	check(t, "Failed to create dynamic TLS config", err)
+	defer cfg.Close()
+
+	creds, err := NewCredentials(cfg)
+	check(t, "Failed to create credentials", err)
+
+	if _, _, err := creds.ServerHandshake(errConn{}); err == nil {
+		t.Fatal("ServerHandshake expected an error")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if _, _, err := creds.ClientHandshake(ctx, "foobar", errConn{}); err == nil {
+		t.Fatal("ClientHandshake expected an error")
+	}
+
+	doneCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _, err = creds.ClientHandshake(doneCtx, "foobar", &ctxWaitConn{ctx: ctx})
+	if want := context.Canceled; err != want {
+		t.Fatalf("ClientHandshake error; want: %v; got: %v", want, err)
+	}
+}
+
+type ctxWaitConn struct {
+	ctx context.Context
+	errConn
+}
+
+func (c *ctxWaitConn) Read(b []byte) (n int, err error) {
+	<-c.ctx.Done()
+	return c.errConn.Read(b)
+}
+
+func (c *ctxWaitConn) Write(b []byte) (n int, err error) {
+	<-c.ctx.Done()
+	return c.errConn.Write(b)
+}
+
+type errConn struct{}
+
+func (errConn) Read(b []byte) (n int, err error)   { return 0, io.ErrClosedPipe }
+func (errConn) Write(b []byte) (n int, err error)  { return 0, io.ErrClosedPipe }
+func (errConn) Close() error                       { return nil }
+func (errConn) LocalAddr() net.Addr                { return &net.UnixAddr{Net: "unix", Name: "/tmp/fake"} }
+func (errConn) RemoteAddr() net.Addr               { return &net.UnixAddr{Net: "unix", Name: "/tmp/fake"} }
+func (errConn) SetDeadline(t time.Time) error      { return nil }
+func (errConn) SetReadDeadline(t time.Time) error  { return nil }
+func (errConn) SetWriteDeadline(t time.Time) error { return nil }
 
 func TestGRPC(t *testing.T) {
 	// create temp dir
