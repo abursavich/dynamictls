@@ -3,6 +3,7 @@
 [![GoDev Reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/abursavich/dynamictls)
 [![Go Report Card](https://goreportcard.com/badge/github.com/abursavich/dynamictls)](https://goreportcard.com/report/github.com/abursavich/dynamictls)
 [![Coverage Status](https://coveralls.io/repos/github/abursavich/dynamictls/badge.svg?branch=master)](https://coveralls.io/github/abursavich/dynamictls?branch=master)
+[![Build Status](https://travis-ci.com/abursavich/dynamictls.svg?branch=master)](https://travis-ci.com/abursavich/dynamictls)
 
 DynamicTLS watches the filesystem and updates TLS configuration when certificate changes occur.
 
