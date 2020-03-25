@@ -125,11 +125,12 @@ func (c *creds) OverrideServerName(serverName string) error {
 	return nil
 }
 
+// sysConn exists because embedded field names syscall.Conn and tls.Conn collide
 type sysConn = syscall.Conn
 
 type tlsSysConn struct {
 	*tls.Conn
-	sysConn // alias is required because embedded field names syscall.Conn and tls.Conn collide
+	sysConn
 }
 
 // wrapSyscallConn tries to wrap rawConn and tlsConn into a net.Conn that implements syscall.Conn.
