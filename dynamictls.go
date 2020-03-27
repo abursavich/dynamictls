@@ -370,17 +370,10 @@ func readCerts(h hash.Hash, pairs []keyPair) ([]tls.Certificate, error) {
 		if err != nil {
 			return nil, fmt.Errorf("dynamictls: keypair parsing error: %w", err)
 		}
-		cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
-		if err != nil {
-			return nil, fmt.Errorf("dynamictls: cert parsing error: %w", err)
-		}
+		cert.Leaf, _ = x509.ParseCertificate(cert.Certificate[0])
 		certs = append(certs, cert)
-		if _, err := h.Write(certPEMBlock); err != nil {
-			return nil, fmt.Errorf("dynamictls: hash write error: %w", err)
-		}
-		if _, err := h.Write(keyPEMBlock); err != nil {
-			return nil, fmt.Errorf("dynamictls: hash write error: %w", err)
-		}
+		_, _ = h.Write(certPEMBlock)
+		_, _ = h.Write(keyPEMBlock)
 	}
 	return certs, nil
 }
@@ -396,9 +389,7 @@ func readCAs(h hash.Hash, files []string) (*x509.CertPool, error) {
 			return nil, fmt.Errorf("dynamictls: certificate authorities read error: %w", err)
 		}
 		pool.AppendCertsFromPEM(caPEMCerts)
-		if _, err := h.Write(caPEMCerts); err != nil {
-			return nil, fmt.Errorf("dynamictls: hash write error: %w", err)
-		}
+		_, _ = h.Write(caPEMCerts)
 	}
 	return pool, nil
 }
