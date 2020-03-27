@@ -459,29 +459,17 @@ func TestMTLS(t *testing.T) {
 	}
 }
 
-func TestDialErrors(t *testing.T) {
+func TestListenError(t *testing.T) {
 	// create temp dir
 	dir, err := ioutil.TempDir("", "")
 	check(t, "Failed to create directory", err)
 	defer os.RemoveAll(dir)
 
-	// create certificates
-	ca, caCertPEM, _, err := tlstest.GenerateCert(nil)
-	check(t, "Failed to create CA", err)
-	caFile := createFile(t, dir, "roots.pem", caCertPEM)
-	_, certPEM, keyPEM, err := tlstest.GenerateCert(&tlstest.CertOptions{
-		Template: &x509.Certificate{
-			KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageDataEncipherment,
-			ExtKeyUsage: []x509.ExtKeyUsage{
-				x509.ExtKeyUsageClientAuth,
-				x509.ExtKeyUsageServerAuth,
-			},
-		},
-		Parent: ca,
-	})
+	// create self-signed certificate
+	_, certPEMBlock, keyPEMBlock, err := tlstest.GenerateCert(nil)
 	check(t, "Failed to create certificate", err)
-	certFile := createFile(t, dir, "cert.pem", certPEM)
-	keyFile := createFile(t, dir, "key.pem", keyPEM)
+	certFile := createFile(t, dir, "cert.pem", certPEMBlock)
+	keyFile := createFile(t, dir, "key.pem", keyPEMBlock)
 
 	// create config
 	cfg, err := NewConfig(
@@ -490,6 +478,35 @@ func TestDialErrors(t *testing.T) {
 		}),
 		WithHTTP2(),
 		WithCertificate(certFile, keyFile),
+		WithRootCAs(certFile),
+		WithErrorLogger(t),
+	)
+	check(t, "Failed to create dynamic TLS config", err)
+	defer cfg.Close()
+
+	if lis, err := cfg.Listen(context.Background(), "unknown", "unknown"); err == nil {
+		lis.Close()
+		t.Fatal("Expected an error")
+	}
+}
+
+func TestDialErrors(t *testing.T) {
+	// create temp dir
+	dir, err := ioutil.TempDir("", "")
+	check(t, "Failed to create directory", err)
+	defer os.RemoveAll(dir)
+
+	// create certificate authority
+	_, caCertPEM, _, err := tlstest.GenerateCert(nil)
+	check(t, "Failed to create CA", err)
+	caFile := createFile(t, dir, "roots.pem", caCertPEM)
+
+	// create config
+	cfg, err := NewConfig(
+		WithBase(&tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}),
+		WithHTTP2(),
 		WithRootCAs(caFile),
 		WithErrorLogger(t),
 	)
