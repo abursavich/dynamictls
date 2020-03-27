@@ -176,6 +176,10 @@ type keyPair struct {
 	certFile, keyFile string
 }
 
+type dialFunc func(ctx context.Context, network, address string) (net.Conn, error)
+
+var defaultDialFunc = (&net.Dialer{}).DialContext
+
 // A Config is used to configure a TLS client or server.
 type Config struct {
 	latest atomic.Value
@@ -191,6 +195,8 @@ type Config struct {
 	watcher *fsnotify.Watcher
 	close   chan struct{} // signals watch goroutine to end
 	done    chan struct{} // signals watch goroutine has ended
+
+	dialFunc dialFunc // used by tests
 }
 
 // NewConfig returns a new Config with the given options.
@@ -206,11 +212,12 @@ func NewConfig(options ...Option) (cfg *Config, err error) {
 		}
 	}()
 	cfg = &Config{
-		base:    &tls.Config{},
-		errLog:  noopLogger{},
-		watcher: w,
-		close:   make(chan struct{}, 1),
-		done:    make(chan struct{}),
+		base:     &tls.Config{},
+		errLog:   noopLogger{},
+		watcher:  w,
+		close:    make(chan struct{}, 1),
+		done:     make(chan struct{}),
+		dialFunc: defaultDialFunc,
 	}
 	for _, o := range sortedOptions(options) {
 		if err := o.apply(cfg); err != nil {
@@ -259,7 +266,7 @@ func (cfg *Config) Listen(ctx context.Context, network, address string) (net.Lis
 // Dial connects to the given network address and initiates a TLS handshake,
 // returning the resulting TLS connection.
 func (cfg *Config) Dial(ctx context.Context, network, address string) (net.Conn, error) {
-	rawConn, err := (&net.Dialer{}).DialContext(ctx, network, address)
+	rawConn, err := cfg.dialFunc(ctx, network, address)
 	if err != nil {
 		return nil, err
 	}
