@@ -16,7 +16,6 @@ import (
 	"net"
 	"path/filepath"
 	"sort"
-	"sync"
 	"sync/atomic"
 
 	"github.com/abursavich/dynamictls/internal/http2"
@@ -189,9 +188,9 @@ type Config struct {
 	notifyFns []NotifyFunc
 	errLog    ErrorLogger
 
-	close   sync.Once         // protects watcher from multiple calls to Close
-	watcher *fsnotify.Watcher // watches directories containing files
-	done    chan struct{}     // signals end of watch goroutine
+	watcher *fsnotify.Watcher
+	close   chan struct{} // signals watch goroutine to end
+	done    chan struct{} // signals watch goroutine has ended
 }
 
 // NewConfig returns a new Config with the given options.
@@ -210,6 +209,7 @@ func NewConfig(options ...Option) (cfg *Config, err error) {
 		base:    &tls.Config{},
 		errLog:  noopLogger{},
 		watcher: w,
+		close:   make(chan struct{}, 1),
 		done:    make(chan struct{}),
 	}
 	for _, o := range sortedOptions(options) {
@@ -233,7 +233,10 @@ func (cfg *Config) addWatch(file string) error {
 
 // Close closes the file watcher associated with the config.
 func (cfg *Config) Close() error {
-	cfg.close.Do(func() { cfg.watcher.Close() })
+	select {
+	case cfg.close <- struct{}{}:
+	default:
+	}
 	<-cfg.done
 	return nil
 }
@@ -326,12 +329,10 @@ func (cfg *Config) read() error {
 
 func (cfg *Config) watch() {
 	defer close(cfg.done)
+	defer cfg.watcher.Close()
 	for {
 		select {
-		case _, ok := <-cfg.watcher.Events:
-			if !ok {
-				return
-			}
+		case <-cfg.watcher.Events:
 			// TODO: ignore unrelated events
 			if err := cfg.read(); err != nil {
 				cfg.errLog.Errorf("%v", err) // errors already decorated
@@ -339,11 +340,10 @@ func (cfg *Config) watch() {
 					fn(nil, err)
 				}
 			}
-		case err, ok := <-cfg.watcher.Errors:
-			if !ok {
-				return
-			}
+		case err := <-cfg.watcher.Errors:
 			cfg.errLog.Errorf("dynamictls: watch error: %v", err)
+		case <-cfg.close:
+			return
 		}
 	}
 }
