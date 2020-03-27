@@ -142,12 +142,6 @@ func TestGRPC(t *testing.T) {
 	caFile := createFile(t, dir, "certs.pem", caCertPEM)
 
 	// create server
-	lis, err := net.Listen("tcp", "localhost:0")
-	check(t, "Failed to create listener", err)
-	defer lis.Close()
-	_, port, err := net.SplitHostPort(lis.Addr().String())
-	check(t, "Failed to get listen port", err)
-	addr := "localhost:" + port
 	_, serverCertPEM, serverKeyPEM, err := tlstest.GenerateCert(&tlstest.CertOptions{
 		Template: &x509.Certificate{
 			KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageDataEncipherment,
@@ -155,7 +149,7 @@ func TestGRPC(t *testing.T) {
 				x509.ExtKeyUsageClientAuth,
 				x509.ExtKeyUsageServerAuth,
 			},
-			DNSNames: []string{"localhost", addr},
+			DNSNames: []string{"foobar"},
 		},
 		Parent: ca,
 	})
@@ -178,6 +172,11 @@ func TestGRPC(t *testing.T) {
 	check(t, "Failed to create server gRPC credentials", err)
 	srv := grpc.NewServer(grpc.Creds(serverCreds))
 	pb.RegisterTestServiceServer(srv, &testServiceServer{})
+	lis, err := net.Listen("tcp", "localhost:0")
+	check(t, "Failed to create listener", err)
+	defer lis.Close()
+	_, port, err := net.SplitHostPort(lis.Addr().String())
+	check(t, "Failed to get listen port", err)
 	defer srv.GracefulStop()
 	go srv.Serve(lis) //nolint:errcheck
 
@@ -194,6 +193,9 @@ func TestGRPC(t *testing.T) {
 	})
 	check(t, "Failed to create client certificate", err)
 	clientCfg, err := dynamictls.NewConfig(
+		dynamictls.WithBase(&tls.Config{
+			MinVersion: tls.VersionTLS13,
+		}),
 		dynamictls.WithCertificate(
 			createFile(t, dir, "client.crt", clientCertPEM),
 			createFile(t, dir, "client.key", clientKeyPEM),
@@ -203,9 +205,11 @@ func TestGRPC(t *testing.T) {
 	)
 	check(t, "Failed to create client TLS config", err)
 	defer clientCfg.Close()
-	clientCreds, err := NewCredentials(serverCfg)
+	clientCreds, err := NewCredentials(clientCfg)
 	check(t, "Failed to create client gRPC credentials", err)
-	conn, err := grpc.Dial(addr,
+	check(t, "Failed to override server name", clientCreds.OverrideServerName("foobar"))
+	clientCreds.(*creds).config()
+	conn, err := grpc.Dial("localhost:"+port,
 		grpc.WithTransportCredentials(clientCreds),
 		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
 	)
