@@ -202,6 +202,48 @@ func TestOptions(t *testing.T) {
 	}
 }
 
+func TestNotifyError(t *testing.T) {
+	dir, err := ioutil.TempDir("", "")
+	check(t, "Failed to create directory", err)
+	defer os.RemoveAll(dir)
+
+	_, certPEMBlock, keyPEMBlock, err := tlstest.GenerateCert(nil)
+	check(t, "Failed to create certificate", err)
+	certFile := createFile(t, dir, "cert.pem", certPEMBlock)
+	keyFile := createFile(t, dir, "key.pem", keyPEMBlock)
+
+	errCh := make(chan error, 1)
+	cfg, err := NewConfig(
+		WithCertificate(certFile, keyFile),
+		WithNotifyFunc(func(_ *tls.Config, err error) { errCh <- err }),
+	)
+	check(t, "Failed to initialize config", err)
+	defer cfg.Close()
+
+	timeout := time.NewTimer(10 * time.Second)
+	defer timeout.Stop()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+	case <-timeout.C:
+		t.Fatal("Timeout waiting for notification")
+	}
+
+	check(t, "Failed to remove cert file", os.Remove(certFile))
+
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatal("Expected an error after deleting certs")
+		}
+	case <-timeout.C:
+		t.Fatal("Timeout waiting for notification")
+	}
+}
+
 func TestKubernetes(t *testing.T) {
 	// See AtomicWriter for details of secret update algorithm used by kubelet:
 	// https://godoc.org/k8s.io/kubernetes/pkg/volume/util#AtomicWriter.Write
