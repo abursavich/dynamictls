@@ -22,30 +22,28 @@ import (
 )
 
 func TestOptions(t *testing.T) {
-	clientCA, clientCACertPEMBlock, _, err := tlstest.GenerateCert(nil)
-	check(t, "Failed to create client CA", err)
-	rootCA, rootCACertPEMBlock, _, err := tlstest.GenerateCert(nil)
-	check(t, "Failed to create root CA", err)
-	cert, certPEMBlock, keyPEMBlock, err := tlstest.GenerateCert(&tlstest.CertOptions{Parent: rootCA})
-	check(t, "Failed to create certificate", err)
-
 	dir, err := ioutil.TempDir("", "")
 	check(t, "Failed to create directory", err)
 	defer os.RemoveAll(dir)
 
+	clientCA, clientCACertPEMBlock, _, err := tlstest.GenerateCert(nil)
+	check(t, "Failed to create client CA", err)
 	clientCAFile := createFile(t, dir, "clients.pem", clientCACertPEMBlock)
-	rootCAFile := createFile(t, dir, "roots.pem", rootCACertPEMBlock)
-	certFile := createFile(t, dir, "cert.pem", certPEMBlock)
-	keyFile := createFile(t, dir, "key.pem", keyPEMBlock)
-
-	certs := []tls.Certificate{*cert}
-	certOption := WithCertificate(certFile, keyFile)
-
 	clientCAs := x509.NewCertPool()
 	clientCAs.AddCert(clientCA.Leaf)
 
+	rootCA, rootCACertPEMBlock, _, err := tlstest.GenerateCert(nil)
+	check(t, "Failed to create root CA", err)
+	rootCAFile := createFile(t, dir, "roots.pem", rootCACertPEMBlock)
 	rootCAs := x509.NewCertPool()
 	rootCAs.AddCert(rootCA.Leaf)
+
+	cert, certPEMBlock, keyPEMBlock, err := tlstest.GenerateCert(&tlstest.CertOptions{Parent: rootCA})
+	check(t, "Failed to create certificate", err)
+	certFile := createFile(t, dir, "cert.pem", certPEMBlock)
+	keyFile := createFile(t, dir, "key.pem", keyPEMBlock)
+	certs := []tls.Certificate{*cert}
+	certOption := WithCertificate(certFile, keyFile)
 
 	tests := []struct {
 		desc    string
@@ -104,6 +102,13 @@ func TestOptions(t *testing.T) {
 			err: true,
 		},
 		{
+			desc: "WithRootCAs Nonexistent CA File",
+			options: []Option{WithRootCAs(
+				filepath.Join(dir, "nonexistent-roots.pem"),
+			)},
+			err: true,
+		},
+		{
 			desc:    "WithClientCAs",
 			options: []Option{WithClientCAs(clientCAFile)},
 			cfg:     &tls.Config{ClientCAs: clientCAs},
@@ -112,6 +117,13 @@ func TestOptions(t *testing.T) {
 			desc: "WithClientCAs Nonexistent Directory",
 			options: []Option{WithClientCAs(
 				filepath.Join(dir, "nonexistent/clients.pem"),
+			)},
+			err: true,
+		},
+		{
+			desc: "WithClientCAs Nonexistent CA File",
+			options: []Option{WithClientCAs(
+				filepath.Join(dir, "nonexistent-clients.pem"),
 			)},
 			err: true,
 		},
@@ -162,13 +174,14 @@ func TestOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			c, err := NewConfig(tt.options...)
+			c, err := NewConfig(append(tt.options, WithErrorLogger(t))...)
 			if err != nil {
 				if tt.err {
 					return // error is expected
 				}
 				t.Fatalf("Unexpected error: %v", err)
 			}
+			defer c.Close()
 			if tt.err {
 				t.Fatal("Expected an error")
 			}
