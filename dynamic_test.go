@@ -364,12 +364,6 @@ func TestMTLS(t *testing.T) {
 	caFile := createFile(t, dir, "certs.pem", caCertPEM)
 
 	// create server config
-	lis, err := net.Listen("tcp", "localhost:0")
-	check(t, "Failed to create listener", err)
-	defer lis.Close()
-	_, port, err := net.SplitHostPort(lis.Addr().String())
-	check(t, "Failed to get listen port", err)
-	addr := "localhost:" + port
 	_, serverCertPEM, serverKeyPEM, err := tlstest.GenerateCert(&tlstest.CertOptions{
 		Template: &x509.Certificate{
 			KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageDataEncipherment,
@@ -377,7 +371,7 @@ func TestMTLS(t *testing.T) {
 				x509.ExtKeyUsageClientAuth,
 				x509.ExtKeyUsageServerAuth,
 			},
-			DNSNames: []string{"localhost", addr},
+			DNSNames: []string{"localhost"},
 		},
 		Parent: ca,
 	})
@@ -423,11 +417,14 @@ func TestMTLS(t *testing.T) {
 	defer clientCfg.Close()
 
 	// create server
+	lis, err := serverCfg.Listen(context.Background(), "tcp", "localhost:0")
+	check(t, "Failed to create listener", err)
+	defer lis.Close()
 	const msg = "hello, test"
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprint(w, msg)
 	})
-	go http.Serve(NewListener(lis, serverCfg), handler) //nolint:errcheck
+	go http.Serve(lis, handler) //nolint:errcheck
 
 	// create client
 	client := &http.Client{
@@ -439,7 +436,9 @@ func TestMTLS(t *testing.T) {
 	defer client.CloseIdleConnections()
 
 	// make a request
-	resp, err := client.Get("https://" + addr)
+	_, port, err := net.SplitHostPort(lis.Addr().String())
+	check(t, "Failed to get listen port", err)
+	resp, err := client.Get("https://localhost:" + port)
 	check(t, "Failed HTTP request", err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	check(t, "Failed reading HTTP response body", err)
