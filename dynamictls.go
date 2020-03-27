@@ -215,7 +215,7 @@ func NewConfig(options ...Option) (cfg *Config, err error) {
 		base:     &tls.Config{},
 		errLog:   noopLogger{},
 		watcher:  w,
-		close:    make(chan struct{}, 1),
+		close:    make(chan struct{}),
 		done:     make(chan struct{}),
 		dialFunc: defaultDialFunc,
 	}
@@ -242,9 +242,9 @@ func (cfg *Config) addWatch(file string) error {
 func (cfg *Config) Close() error {
 	select {
 	case cfg.close <- struct{}{}:
-	default:
+		<-cfg.done
+	case <-cfg.done:
 	}
-	<-cfg.done
 	return nil
 }
 

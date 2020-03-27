@@ -24,22 +24,26 @@ import (
 )
 
 func TestOptions(t *testing.T) {
+	// create temp dir
 	dir, err := ioutil.TempDir("", "")
 	check(t, "Failed to create directory", err)
 	defer os.RemoveAll(dir)
 
+	// create client certificate authority
 	clientCA, clientCACertPEMBlock, _, err := tlstest.GenerateCert(nil)
 	check(t, "Failed to create client CA", err)
 	clientCAFile := createFile(t, dir, "clients.pem", clientCACertPEMBlock)
 	clientCAs := x509.NewCertPool()
 	clientCAs.AddCert(clientCA.Leaf)
 
+	// create root certificate authority
 	rootCA, rootCACertPEMBlock, _, err := tlstest.GenerateCert(nil)
 	check(t, "Failed to create root CA", err)
 	rootCAFile := createFile(t, dir, "roots.pem", rootCACertPEMBlock)
 	rootCAs := x509.NewCertPool()
 	rootCAs.AddCert(rootCA.Leaf)
 
+	// create certificate
 	cert, certPEMBlock, keyPEMBlock, err := tlstest.GenerateCert(&tlstest.CertOptions{Parent: rootCA})
 	check(t, "Failed to create certificate", err)
 	certFile := createFile(t, dir, "cert.pem", certPEMBlock)
@@ -205,15 +209,18 @@ func TestOptions(t *testing.T) {
 }
 
 func TestNotifyError(t *testing.T) {
+	// create temp dir
 	dir, err := ioutil.TempDir("", "")
 	check(t, "Failed to create directory", err)
 	defer os.RemoveAll(dir)
 
+	// create certificate authority
 	_, certPEMBlock, keyPEMBlock, err := tlstest.GenerateCert(nil)
 	check(t, "Failed to create certificate", err)
 	certFile := createFile(t, dir, "cert.pem", certPEMBlock)
 	keyFile := createFile(t, dir, "key.pem", keyPEMBlock)
 
+	// create config
 	errCh := make(chan error, 1)
 	cfg, err := NewConfig(
 		WithCertificate(certFile, keyFile),
@@ -244,6 +251,9 @@ func TestNotifyError(t *testing.T) {
 	case <-timeout.C:
 		t.Fatal("Timeout waiting for notification")
 	}
+
+	cfg.Close() // idempotent
+	cfg.Close() // idempotent
 }
 
 func TestKubernetes(t *testing.T) {
