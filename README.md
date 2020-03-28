@@ -14,6 +14,7 @@ It provides simple integrations with HTTP/1.1, HTTP/2, gRPC, and Prometheus.
 ### HTTP Server
 
 ```go
+// create metrics
 metrics, err := tlsprom.NewMetrics(
     tlsprom.WithHTTP(),
     tlsprom.WithServer(),
@@ -21,16 +22,18 @@ metrics, err := tlsprom.NewMetrics(
 check(err)
 prometheus.MustRegister(metrics)
 
+// create TLS config
 cfg, err := dynamictls.NewConfig(
+    dynamictls.WithNotifyFunc(metrics.Update),
     dynamictls.WithCertificate(primaryCertFile, primaryKeyFile),
     dynamictls.WithCertificate(secondaryCertFile, secondaryKeyFile),
     dynamictls.WithRootCAs(caFile),
-    dynamictls.WithNotifyFunc(metrics.Update),
-    dynamictls.WithHTTP(), // adds HTTP/2 and HTTP/1.1 protocols
+    dynamictls.WithHTTP(), // NB: adds HTTP/2 and HTTP/1.1 protocols
 )
 check(err)
 defer cfg.Close()
 
+// listen and serve
 lis, err := cfg.Listen(context.Background(), "tcp", addr)
 check(err)
 check(http.Serve(lis, http.DefaultServeMux))
@@ -39,6 +42,7 @@ check(http.Serve(lis, http.DefaultServeMux))
 ### HTTP Client
 
 ```go
+// create metrics
 metrics, err := tlsprom.NewMetrics(
     tlsprom.WithHTTP(),
     tlsprom.WithClient(),
@@ -46,22 +50,24 @@ metrics, err := tlsprom.NewMetrics(
 check(err)
 prometheus.MustRegister(metrics)
 
+// create TLS config
 cfg, err := dynamictls.NewConfig(
+    dynamictls.WithNotifyFunc(metrics.Update),
     dynamictls.WithBase(&tls.Config{
         MinVersion: tls.VersionTLS12,
     }),
     dynamictls.WithCertificate(certFile, keyFile),
     dynamictls.WithRootCAs(caFile),
-    dynamictls.WithNotifyFunc(metrics.Update),
-    dynamictls.WithHTTP(), // adds HTTP/2 and HTTP/1.1 protocols
+    dynamictls.WithHTTP(), // NB: adds HTTP/2 and HTTP/1.1 protocols
 )
 check(err)
 defer cfg.Close()
 
+// create HTTP client
 client := &http.Client{
     Transport: &http.Transport{
         DialTLSContext:    cfg.Dial,
-        ForceAttemptHTTP2: true, // required if using a custom dialer with HTTP/2
+        ForceAttemptHTTP2: true, // NB: required if using a custom dialer with HTTP/2
     },
 }
 defer client.CloseIdleConnections()
@@ -70,6 +76,7 @@ defer client.CloseIdleConnections()
 ### gRPC Server
 
 ```go
+// create metrics
 metrics, err := tlsprom.NewMetrics(
     tlsprom.WithGRPC(),
     tlsprom.WithServer(),
@@ -77,31 +84,37 @@ metrics, err := tlsprom.NewMetrics(
 check(err)
 prometheus.MustRegister(metrics)
 
+// create TLS config
 cfg, err := dynamictls.NewConfig(
+    dynamictls.WithNotifyFunc(metrics.Update),
     dynamictls.WithBase(&tls.Config{
         ClientAuth: tls.RequireAndVerifyClientCert,
+        MinVersion: tls.VersionTLS13,
     }),
     dynamictls.WithCertificate(certFile, keyFile),
-    dynamictls.WithRootCAs(caFile), // used by metrics to verify cert expiration
+    dynamictls.WithRootCAs(caFile), // NB: metrics use RootCAs to verify local cert expiration
     dynamictls.WithClientCAs(caFile),
-    dynamictls.WithNotifyFunc(metrics.Update),
+    dynamictls.WithHTTP2(),
 )
 check(err)
 defer cfg.Close()
 
+// create server with credentials
 creds, err := grpctls.NewCredentials(cfg)
 check(err)
-grpcSrv := grpc.NewServer(grpc.Creds(creds))
-pb.RegisterFooServer(grpcSrv, &fooServer{})
+srv := grpc.NewServer(grpc.Creds(creds))
+pb.RegisterTestServiceServer(srv, &testServer{})
 
-lis, err := net.Listen("tcp", addr)
+// listen and serve
+lis, err := net.Listen("tcp", addr) // NB: use plain listener
 check(err)
-check(grpcSrv.Serve(lis)) // gRPC server uses plain TCP listener
+check(srv.Serve(lis))
 ```
 
 ### gRPC Client
 
 ```go
+// create metrics
 metrics, err := tlsprom.NewMetrics(
     tlsprom.WithGRPC(),
     tlsprom.WithClient(),
@@ -109,22 +122,28 @@ metrics, err := tlsprom.NewMetrics(
 check(err)
 prometheus.MustRegister(metrics)
 
+// create TLS config
 cfg, err := dynamictls.NewConfig(
+    dynamictls.WithNotifyFunc(metrics.Update),
+    dynamictls.WithBase(&tls.Config{
+        MinVersion: tls.VersionTLS13,
+    }),
     dynamictls.WithCertificate(certFile, keyFile),
     dynamictls.WithRootCAs(caFile),
-    dynamictls.WithNotifyFunc(metrics.Update),
+    dynamictls.WithHTTP2(),
 )
 check(err)
 defer cfg.Close()
 
+// create client with credentials
 creds, err := grpctls.NewCredentials(cfg)
 check(err)
-conn, err := grpc.Dial(addr,
+conn, err := grpc.Dial(
+    addr,
     grpc.WithTransportCredentials(creds),
     grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
 )
 check(err)
 defer conn.Close()
-
 client := pb.NewTestServiceClient(conn)
 ```

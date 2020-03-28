@@ -1,3 +1,7 @@
+// Copyright 2020 Andrew Bursavich. All rights reserved.
+// Use of this source code is governed by The MIT License
+// which can be found in the LICENSE file.
+
 package grpctls
 
 import (
@@ -208,7 +212,6 @@ func TestGRPC(t *testing.T) {
 	clientCreds, err := NewCredentials(clientCfg)
 	check(t, "Failed to create client gRPC credentials", err)
 	check(t, "Failed to override server name", clientCreds.OverrideServerName("foobar"))
-	clientCreds.(*creds).config()
 	conn, err := grpc.Dial("localhost:"+port,
 		grpc.WithTransportCredentials(clientCreds),
 		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),

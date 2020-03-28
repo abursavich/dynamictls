@@ -23,11 +23,11 @@ func ExampleConfig_Listen() {
 	prometheus.MustRegister(metrics)
 
 	cfg, err := dynamictls.NewConfig(
+		dynamictls.WithNotifyFunc(metrics.Update),
 		dynamictls.WithCertificate(primaryCertFile, primaryKeyFile),
 		dynamictls.WithCertificate(secondaryCertFile, secondaryKeyFile),
 		dynamictls.WithRootCAs(caFile),
-		dynamictls.WithNotifyFunc(metrics.Update),
-		dynamictls.WithHTTP(), // adds HTTP/2 and HTTP/1.1 protocols
+		dynamictls.WithHTTP(), // NB: adds HTTP/2 and HTTP/1.1 protocols
 	)
 	check(err)
 	defer cfg.Close()
@@ -46,13 +46,13 @@ func ExampleConfig_Dial() {
 	prometheus.MustRegister(metrics)
 
 	cfg, err := dynamictls.NewConfig(
+		dynamictls.WithNotifyFunc(metrics.Update),
 		dynamictls.WithBase(&tls.Config{
 			MinVersion: tls.VersionTLS12,
 		}),
 		dynamictls.WithCertificate(certFile, keyFile),
 		dynamictls.WithRootCAs(caFile),
-		dynamictls.WithNotifyFunc(metrics.Update),
-		dynamictls.WithHTTP(), // adds HTTP/2 and HTTP/1.1 protocols
+		dynamictls.WithHTTP(), // NB: adds HTTP/2 and HTTP/1.1 protocols
 	)
 	check(err)
 	defer cfg.Close()
@@ -60,7 +60,7 @@ func ExampleConfig_Dial() {
 	client := &http.Client{
 		Transport: &http.Transport{
 			DialTLSContext:    cfg.Dial,
-			ForceAttemptHTTP2: true, // required if using a custom dialer with HTTP/2
+			ForceAttemptHTTP2: true, // NB: required if using a custom dialer with HTTP/2
 		},
 	}
 	defer client.CloseIdleConnections()
