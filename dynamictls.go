@@ -127,7 +127,7 @@ func WithNotifyFunc(notify NotifyFunc) Option {
 // WithErrorLogger returns an Option that sets the logger for errors.
 func WithErrorLogger(logger ErrorLogger) Option {
 	return optionFunc(func(c *Config) error {
-		c.errLog = logger
+		c.logger = logger
 		return nil
 	})
 }
@@ -190,7 +190,7 @@ type Config struct {
 	clientCAs []string
 	certs     []keyPair
 	notifyFns []NotifyFunc
-	errLog    ErrorLogger
+	logger    ErrorLogger
 
 	watcher *fsnotify.Watcher
 	close   chan struct{} // signals watch goroutine to end
@@ -213,7 +213,7 @@ func NewConfig(options ...Option) (cfg *Config, err error) {
 	}()
 	cfg = &Config{
 		base:     &tls.Config{},
-		errLog:   noopLogger{},
+		logger:   noopLogger{},
 		watcher:  w,
 		close:    make(chan struct{}),
 		done:     make(chan struct{}),
@@ -342,13 +342,13 @@ func (cfg *Config) watch() {
 		case <-cfg.watcher.Events:
 			// TODO: ignore unrelated events
 			if err := cfg.read(); err != nil {
-				cfg.errLog.Errorf("%v", err) // errors already decorated
+				cfg.logger.Errorf("%v", err) // errors already decorated
 				for _, fn := range cfg.notifyFns {
 					fn(nil, err)
 				}
 			}
 		case err := <-cfg.watcher.Errors:
-			cfg.errLog.Errorf("dynamictls: watch error: %v", err)
+			cfg.logger.Errorf("dynamictls: watch error: %v", err)
 		case <-cfg.close:
 			return
 		}
