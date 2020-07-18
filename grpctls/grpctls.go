@@ -12,7 +12,7 @@ import (
 	"syscall"
 
 	"github.com/abursavich/dynamictls"
-	"github.com/abursavich/dynamictls/internal/http2"
+	"github.com/abursavich/dynamictls/internal/forked/go/http2"
 	"google.golang.org/grpc/credentials"
 )
 

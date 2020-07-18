@@ -18,7 +18,7 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github.com/abursavich/dynamictls/internal/http2"
+	"github.com/abursavich/dynamictls/internal/forked/go/http2"
 	fsnotify "gopkg.in/fsnotify.v1"
 )
 
