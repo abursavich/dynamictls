@@ -440,10 +440,9 @@ func TestMTLS(t *testing.T) {
 
 	// create client
 	client := &http.Client{
-		Transport: &http.Transport{
-			DialTLSContext:    clientCfg.Dial,
-			ForceAttemptHTTP2: true,
-		},
+		// NB: DialTLSContext added in go 1.14, httpTransport uses DialTLS in previous go versions.
+		// TODO: Remove when go 1.15 is released.
+		Transport: httpTransport(clientCfg),
 	}
 	defer client.CloseIdleConnections()
 

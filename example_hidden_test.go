@@ -2,6 +2,8 @@
 // Use of this source code is governed by The MIT License
 // which can be found in the LICENSE file.
 
+// +build go1.14
+
 package dynamictls_test
 
 import (

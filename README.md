@@ -66,8 +66,8 @@ defer cfg.Close()
 // create HTTP client
 client := &http.Client{
     Transport: &http.Transport{
-        DialTLSContext:    cfg.Dial,
-        ForceAttemptHTTP2: true, // NB: required if using a custom dialer with HTTP/2
+        DialTLSContext:    cfg.Dial, // NB: DialTLSContext added in go 1.14
+        ForceAttemptHTTP2: true,     // NB: required if using a custom dialer with HTTP/2
     },
 }
 defer client.CloseIdleConnections()
