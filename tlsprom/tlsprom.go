@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+//
 // Copyright 2020 Andrew Bursavich. All rights reserved.
 // Use of this source code is governed by The MIT License
 // which can be found in the LICENSE file.
