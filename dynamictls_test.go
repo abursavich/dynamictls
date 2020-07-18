@@ -530,12 +530,11 @@ func TestDialErrors(t *testing.T) {
 		t.Fatal("Expected a handshake error")
 	}
 
+	cfg.dialFunc = func(_ context.Context, network, address string) (net.Conn, error) {
+		return &ctxWaitConn{ctx: ctx}, nil // block handshake until deferred close
+	}
 	doneCtx, cancel := context.WithCancel(context.Background())
 	cancel()
-
-	cfg.dialFunc = func(ctx context.Context, network, address string) (net.Conn, error) {
-		return &ctxWaitConn{ctx: ctx}, nil
-	}
 	_, err = cfg.Dial(doneCtx, "tcp", "localhost")
 	if want := context.Canceled; err != want {
 		t.Fatalf("Dial error; want: %v; got: %v", want, err)
