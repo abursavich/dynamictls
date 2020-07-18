@@ -4,11 +4,10 @@ go 1.14
 
 require (
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
-	github.com/golang/protobuf v1.3.5 // indirect
-	github.com/google/go-cmp v0.4.0
-	github.com/prometheus/client_golang v1.5.1
-	github.com/prometheus/procfs v0.0.10 // indirect
-	golang.org/x/sys v0.0.0-20200302150141-5c8b2ff67527 // indirect
-	google.golang.org/grpc v1.28.0
+	github.com/google/go-cmp v0.5.0
+	github.com/prometheus/client_golang v1.7.1
+	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae // indirect
+	google.golang.org/grpc v1.30.0
+	google.golang.org/protobuf v1.25.0 // indirect
 	gopkg.in/fsnotify.v1 v1.4.7
 )
