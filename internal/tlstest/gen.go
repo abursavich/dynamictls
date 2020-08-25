@@ -23,9 +23,9 @@ import (
 
 // CertOptions are certificate options.
 type CertOptions struct {
-	Template *x509.Certificate
-	Parent   *tls.Certificate
-	Curve    elliptic.Curve
+	Parent     *tls.Certificate
+	Template   *x509.Certificate
+	PrivateKey crypto.Signer
 }
 
 // GenerateCert generates a certificate with the given options.
@@ -41,13 +41,15 @@ func GenerateCert(options *CertOptions) (cert *tls.Certificate, certPEMBlock, ke
 		return nil, nil, nil, err
 	}
 
-	priv, err := privateKey(options.Curve)
-	if err != nil {
-		return nil, nil, nil, err
+	priv := options.PrivateKey
+	if priv == nil {
+		if priv, err = privateKey(); err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	parent := template
-	signer := crypto.Signer(priv)
+	signer := priv
 	if !selfSigned {
 		if parent = options.Parent.Leaf; parent == nil {
 			if parent, err = x509.ParseCertificate(options.Parent.Certificate[0]); err != nil {
@@ -99,19 +101,16 @@ func certTemplate(template *x509.Certificate, selfSigned bool) (*x509.Certificat
 	return &tmpl, nil
 }
 
-func privateKey(curve elliptic.Curve) (*ecdsa.PrivateKey, error) {
-	if curve == nil {
-		curve = elliptic.P256()
-	}
-	priv, err := ecdsa.GenerateKey(curve, rand.Reader)
+func privateKey() (*ecdsa.PrivateKey, error) {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("private key generation error: %v", err)
 	}
 	return priv, err
 }
 
-func generateCert(template, parent *x509.Certificate, priv *ecdsa.PrivateKey, signer crypto.Signer) (cert *tls.Certificate, certPEMBlock, keyPEMBlock []byte, err error) {
-	derBytes, err := x509.CreateCertificate(rand.Reader, template, parent, &priv.PublicKey, signer)
+func generateCert(template, parent *x509.Certificate, priv crypto.Signer, signer crypto.Signer) (cert *tls.Certificate, certPEMBlock, keyPEMBlock []byte, err error) {
+	derBytes, err := x509.CreateCertificate(rand.Reader, template, parent, priv.Public(), signer)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("certificate creation error: %v", err)
 	}
