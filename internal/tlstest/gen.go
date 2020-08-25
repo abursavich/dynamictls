@@ -84,19 +84,18 @@ func certTemplate(template *x509.Certificate, selfSigned bool) (*x509.Certificat
 	if tmpl.NotAfter.IsZero() {
 		tmpl.NotAfter = time.Now().Add(time.Hour)
 	}
-	if len(tmpl.ExtKeyUsage) == 0 {
+	if tmpl.ExtKeyUsage == nil {
 		tmpl.ExtKeyUsage = []x509.ExtKeyUsage{
 			x509.ExtKeyUsageServerAuth,
 			x509.ExtKeyUsageClientAuth,
 		}
 	}
-	tmpl.KeyUsage |= x509.KeyUsageKeyEncipherment
 	tmpl.KeyUsage |= x509.KeyUsageDigitalSignature
 	if selfSigned {
 		tmpl.KeyUsage |= x509.KeyUsageCertSign
 		tmpl.IsCA = true
-		tmpl.BasicConstraintsValid = true
 	}
+	tmpl.BasicConstraintsValid = true
 	return &tmpl, nil
 }
 
