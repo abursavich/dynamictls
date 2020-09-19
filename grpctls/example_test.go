@@ -53,9 +53,9 @@ func Example() {
 	check(err)
 	defer conn.Close()
 	srv := grpc.NewServer(grpc.Creds(creds))
-	pb.RegisterTestServiceServer(srv, &testServer{
+	pb.RegisterTestServiceService(srv, pb.NewTestServiceService(&testServer{
 		backend: pb.NewTestServiceClient(conn),
-	})
+	}))
 
 	// listen and serve
 	lis, err := net.Listen("tcp", addr) // NB: use plain listener
@@ -129,7 +129,7 @@ func Example_server() {
 	creds, err := grpctls.NewCredentials(cfg)
 	check(err)
 	srv := grpc.NewServer(grpc.Creds(creds))
-	pb.RegisterTestServiceServer(srv, &testServer{})
+	pb.RegisterTestServiceService(srv, pb.NewTestServiceService(&testServer{}))
 
 	// listen and serve
 	lis, err := net.Listen("tcp", addr) // NB: use plain listener
