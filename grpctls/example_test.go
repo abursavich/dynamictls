@@ -10,9 +10,9 @@ import (
 	"crypto/tls"
 	"net"
 
-	"github.com/abursavich/dynamictls"
-	"github.com/abursavich/dynamictls/grpctls"
-	"github.com/abursavich/dynamictls/tlsprom"
+	"bursavich.dev/dynamictls"
+	"bursavich.dev/dynamictls/grpctls"
+	"bursavich.dev/dynamictls/tlsprom"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 

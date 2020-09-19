@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abursavich/dynamictls/internal/tlstest"
+	"bursavich.dev/dynamictls/internal/tlstest"
 	"github.com/google/go-cmp/cmp"
 )
 

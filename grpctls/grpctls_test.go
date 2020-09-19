@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abursavich/dynamictls"
-	"github.com/abursavich/dynamictls/internal/tlstest"
+	"bursavich.dev/dynamictls"
+	"bursavich.dev/dynamictls/internal/tlstest"
 	"google.golang.org/grpc"
 
 	pb "google.golang.org/grpc/test/grpc_testing"

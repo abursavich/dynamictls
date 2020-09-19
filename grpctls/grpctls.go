@@ -13,8 +13,8 @@ import (
 	"net"
 	"syscall"
 
-	"github.com/abursavich/dynamictls"
-	"github.com/abursavich/dynamictls/internal/forked/go/http2"
+	"bursavich.dev/dynamictls"
+	"bursavich.dev/dynamictls/internal/forked/go/http2"
 	"google.golang.org/grpc/credentials"
 )
 

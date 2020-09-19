@@ -13,8 +13,8 @@ import (
 	"crypto/tls"
 	"net/http"
 
-	"github.com/abursavich/dynamictls"
-	"github.com/abursavich/dynamictls/tlsprom"
+	"bursavich.dev/dynamictls"
+	"bursavich.dev/dynamictls/tlsprom"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

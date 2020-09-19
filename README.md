@@ -1,7 +1,7 @@
 # DynamicTLS
 [![License](https://img.shields.io/badge/license-mit-blue.svg?style=flat-square)](https://raw.githubusercontent.com/abursavich/dynamictls/master/LICENSE)
-[![GoDev Reference](https://pkg.go.dev/badge/github.com/abursavich/dynamictls)](https://pkg.go.dev/github.com/abursavich/dynamictls)
-[![Go Report Card](https://goreportcard.com/badge/github.com/abursavich/dynamictls)](https://goreportcard.com/report/github.com/abursavich/dynamictls)
+[![GoDev Reference](https://pkg.go.dev/badge/bursavich.dev/dynamictls)](https://pkg.go.dev/bursavich.dev/dynamictls)
+[![Go Report Card](https://goreportcard.com/badge/bursavich.dev/dynamictls)](https://goreportcard.com/report/bursavich.dev/dynamictls)
 [![Coverage Status](https://coveralls.io/repos/github/abursavich/dynamictls/badge.svg?branch=master)](https://coveralls.io/github/abursavich/dynamictls?branch=master)
 [![Build Status](https://travis-ci.com/abursavich/dynamictls.svg?branch=master)](https://travis-ci.com/abursavich/dynamictls)
 

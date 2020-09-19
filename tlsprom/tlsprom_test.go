@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abursavich/dynamictls/internal/tlstest"
+	"bursavich.dev/dynamictls/internal/tlstest"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

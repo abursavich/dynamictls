@@ -1,4 +1,4 @@
-module github.com/abursavich/dynamictls
+module bursavich.dev/dynamictls
 
 go 1.14
 
