@@ -2,11 +2,6 @@ dist: bionic
 
 language: go
 
-env:
-    global:
-        - GO111MODULE=on
-        - LINT_VERSION=v1.28.3
-
 go:
     - oldstable
     - stable
@@ -15,9 +10,12 @@ go:
 notifications:
     email: false
 
-before_script:
-    - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin $LINT_VERSION
-    - go install github.com/mattn/goveralls
+install:
+    # TODO(abursavich): remove these hacks once go1.16 is oldstable
+    - pushd $(mktemp -d) && go mod init "install-hack"
+    - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest || go install github.com/golangci/golangci-lint/cmd/golangci-lint
+    - go install github.com/mattn/goveralls@latest || go install github.com/mattn/goveralls
+    - popd
   
 script:
     - golangci-lint run
