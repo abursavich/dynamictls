@@ -1,9 +1,9 @@
 # DynamicTLS
-[![License](https://img.shields.io/badge/license-mit-blue.svg?style=flat-square)](https://raw.githubusercontent.com/abursavich/dynamictls/master/LICENSE)
-[![GoDev Reference](https://pkg.go.dev/badge/bursavich.dev/dynamictls)](https://pkg.go.dev/bursavich.dev/dynamictls)
-[![Go Report Card](https://goreportcard.com/badge/bursavich.dev/dynamictls)](https://goreportcard.com/report/bursavich.dev/dynamictls)
-[![Coverage Status](https://coveralls.io/repos/github/abursavich/dynamictls/badge.svg?branch=master)](https://coveralls.io/github/abursavich/dynamictls?branch=master)
-[![Build Status](https://travis-ci.com/abursavich/dynamictls.svg?branch=master)](https://travis-ci.com/abursavich/dynamictls)
+[![License](https://img.shields.io/badge/license-mit-blue.svg?style=for-the-badge)](https://raw.githubusercontent.com/abursavich/dynamictls/master/LICENSE)
+[![GoDev Reference](https://img.shields.io/static/v1?logo=go&logoColor=white&color=00ADD8&label=%7F&message=reference&style=for-the-badge)](https://pkg.go.dev/bursavich.dev/dynamictls)
+[![Go Report Card](https://goreportcard.com/badge/bursavich.dev/dynamictls?style=for-the-badge)](https://goreportcard.com/report/bursavich.dev/dynamictls)
+[![Build Status](https://img.shields.io/travis/com/abursavich/dynamictls/master?style=for-the-badge)](https://travis-ci.com/abursavich/dynamictls)
+[![Coverage Status](https://img.shields.io/coveralls/github/abursavich/dynamictls/master?style=for-the-badge)](https://coveralls.io/github/abursavich/dynamictls?branch=master)
 
 DynamicTLS watches the filesystem and updates TLS configuration when certificate changes occur.
 
