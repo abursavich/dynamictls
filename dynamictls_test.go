@@ -197,10 +197,10 @@ func TestOptions(t *testing.T) {
 			if !reflect.DeepEqual(tt.cfg.Certificates, got.Certificates) {
 				t.Fatal("Unexpected Certificates")
 			}
-			if !reflect.DeepEqual(tt.cfg.RootCAs, got.RootCAs) {
+			if !certPoolEqual(tt.cfg.RootCAs, got.RootCAs) {
 				t.Fatal("Unexpected RootCAs")
 			}
-			if !reflect.DeepEqual(tt.cfg.ClientCAs, got.ClientCAs) {
+			if !certPoolEqual(tt.cfg.ClientCAs, got.ClientCAs) {
 				t.Fatal("Unexpected ClientCAs")
 			}
 			if diff := cmp.Diff(tt.cfg.NextProtos, got.NextProtos); diff != "" {
@@ -208,6 +208,17 @@ func TestOptions(t *testing.T) {
 			}
 		})
 	}
+}
+
+func certPoolEqual(x, y *x509.CertPool) bool {
+	var xs, ys [][]byte
+	if x != nil {
+		xs = x.Subjects()
+	}
+	if y != nil {
+		ys = x.Subjects()
+	}
+	return reflect.DeepEqual(xs, ys)
 }
 
 func TestNotifyError(t *testing.T) {
