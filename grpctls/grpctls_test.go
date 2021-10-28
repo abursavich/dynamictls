@@ -177,11 +177,7 @@ func TestGRPC(t *testing.T) {
 	serverCreds, err := NewCredentials(serverCfg)
 	check(t, "Failed to create server gRPC credentials", err)
 	srv := grpc.NewServer(grpc.Creds(serverCreds))
-	pb.RegisterTestServiceService(srv, &pb.TestServiceService{
-		UnaryCall: func(ctx context.Context, req *pb.SimpleRequest) (*pb.SimpleResponse, error) {
-			return &pb.SimpleResponse{Payload: req.Payload}, nil
-		},
-	})
+	pb.RegisterTestServiceServer(srv, &testServer{})
 	lis, err := net.Listen("tcp", "localhost:0")
 	check(t, "Failed to create listener", err)
 	defer lis.Close()
@@ -231,6 +227,14 @@ func TestGRPC(t *testing.T) {
 	defer cancel()
 	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
 	check(t, "Failed to make RPC", err)
+}
+
+type testServer struct {
+	pb.UnimplementedTestServiceServer
+}
+
+func (*testServer) UnaryCall(ctx context.Context, req *pb.SimpleRequest) (*pb.SimpleResponse, error) {
+	return &pb.SimpleResponse{Payload: req.Payload}, nil
 }
 
 func createFile(t *testing.T, dir, base string, buf []byte) string {

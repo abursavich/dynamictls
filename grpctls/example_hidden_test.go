@@ -28,6 +28,7 @@ func check(err error) {
 }
 
 type testServer struct {
+	pb.UnimplementedTestServiceServer
 	backend pb.TestServiceClient
 }
 
