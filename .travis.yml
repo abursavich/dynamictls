@@ -11,11 +11,8 @@ notifications:
     email: false
 
 install:
-    # TODO(abursavich): remove these hacks once go1.16 is oldstable
-    - pushd $(mktemp -d) && go mod init "install-hack"
-    - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest || go install github.com/golangci/golangci-lint/cmd/golangci-lint
-    - go install github.com/mattn/goveralls@latest || go install github.com/mattn/goveralls
-    - popd
+    - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+    - go install github.com/mattn/goveralls@latest
   
 script:
     - golangci-lint run
