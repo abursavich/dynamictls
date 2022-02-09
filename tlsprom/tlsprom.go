@@ -13,6 +13,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -22,20 +23,11 @@ const (
 	expirationName  = "tls_config_earliest_certificate_expiration_time_seconds"
 )
 
-// An ErrorLogger logs errors.
-type ErrorLogger interface {
-	Errorf(format string, args ...interface{})
-}
-
-type noopLogger struct{}
-
-func (noopLogger) Errorf(format string, args ...interface{}) {}
-
 type config struct {
 	namespace string
 	subsystem string
 	usages    []x509.ExtKeyUsage
-	logger    ErrorLogger
+	log       logr.Logger
 }
 
 // An Option applies optional configuration.
@@ -76,10 +68,10 @@ func sortedOptions(options []Option) []Option {
 	return options
 }
 
-// WithErrorLogger returns an Option that sets the logger for errors.
-func WithErrorLogger(logger ErrorLogger) Option {
+// WithLogger returns an Option that sets the logger for errors.
+func WithLogger(log logr.Logger) Option {
 	return optionFunc(func(c *config) error {
-		c.logger = logger
+		c.log = log
 		return nil
 	})
 }
@@ -152,14 +144,14 @@ type Metrics struct {
 	expiration  prometheus.Gauge
 
 	usages []x509.ExtKeyUsage
-	logger ErrorLogger
+	log    logr.Logger
 }
 
 // NewMetrics returns new Metrics with the given options.
 func NewMetrics(options ...Option) (*Metrics, error) {
 	cfg := &config{
 		usages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
-		logger: &noopLogger{},
+		log:    logr.Discard(),
 	}
 	for _, o := range sortedOptions(options) {
 		if err := o.apply(cfg); err != nil {
@@ -186,7 +178,7 @@ func NewMetrics(options ...Option) (*Metrics, error) {
 			Help:      "Earliest expiration time of the TLS configuration's certificates in seconds since the Unix epoch.",
 		}),
 		usages: cfg.usages,
-		logger: cfg.logger,
+		log:    cfg.log,
 	}
 	return m, nil
 }
@@ -231,7 +223,7 @@ func (m *Metrics) earliestExpiration(cfg *tls.Config) (time.Time, error) {
 		if x509Cert == nil {
 			var err error
 			if x509Cert, err = x509.ParseCertificate(cert.Certificate[0]); err != nil {
-				m.logger.Errorf("tlsprom: cert parsing error: %v", err)
+				m.log.Error(err, "Failed to parse TLS certificate")
 				return time.Time{}, err
 			}
 		}
@@ -240,7 +232,7 @@ func (m *Metrics) earliestExpiration(cfg *tls.Config) (time.Time, error) {
 			KeyUsages: m.usages,
 		})
 		if err != nil {
-			m.logger.Errorf("tlsprom: cert verification error: %v", err)
+			m.log.Error(err, "Failed to validate TLS certificate")
 			return time.Time{}, err
 		}
 		for _, chain := range chains {
@@ -252,7 +244,7 @@ func (m *Metrics) earliestExpiration(cfg *tls.Config) (time.Time, error) {
 		}
 	}
 	if t.IsZero() {
-		m.logger.Errorf("tlsprom: no certificates in config")
+		m.log.Error(nil, "Failed to find a certificate in the TLS config")
 	}
 	return t, nil
 }

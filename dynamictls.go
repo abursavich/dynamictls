@@ -21,19 +21,11 @@ import (
 	"sync/atomic"
 
 	"bursavich.dev/dynamictls/internal/forked/go/http2"
+	"github.com/go-logr/logr"
 	fsnotify "gopkg.in/fsnotify.v1"
 )
 
 const hashSize = 16 // 128-bit
-
-// An ErrorLogger logs errors.
-type ErrorLogger interface {
-	Errorf(format string, args ...interface{})
-}
-
-type noopLogger struct{}
-
-func (noopLogger) Errorf(format string, args ...interface{}) {}
 
 // NotifyFunc is a function that is called when new config data
 // is loaded or an error occurs loading new config data.
@@ -126,10 +118,10 @@ func WithNotifyFunc(notify NotifyFunc) Option {
 	})
 }
 
-// WithErrorLogger returns an Option that sets the logger for errors.
-func WithErrorLogger(logger ErrorLogger) Option {
+// WithLogger returns an Option that sets the logger for errors.
+func WithLogger(log logr.Logger) Option {
 	return optionFunc(func(c *Config) error {
-		c.logger = logger
+		c.log = log
 		return nil
 	})
 }
@@ -192,7 +184,7 @@ type Config struct {
 	clientCAs []string
 	certs     []keyPair
 	notifyFns []NotifyFunc
-	logger    ErrorLogger
+	log       logr.Logger
 
 	watcher *fsnotify.Watcher
 	close   chan struct{} // signals watch goroutine to end
@@ -215,7 +207,7 @@ func NewConfig(options ...Option) (cfg *Config, err error) {
 	}()
 	cfg = &Config{
 		base:     &tls.Config{},
-		logger:   noopLogger{},
+		log:      logr.Discard(),
 		watcher:  w,
 		close:    make(chan struct{}),
 		done:     make(chan struct{}),
@@ -344,13 +336,13 @@ func (cfg *Config) watch() {
 		case <-cfg.watcher.Events:
 			// TODO: ignore unrelated events
 			if err := cfg.read(); err != nil {
-				cfg.logger.Errorf("%v", err) // errors already decorated
+				cfg.log.Error(err, "Read failure") // errors already decorated
 				for _, fn := range cfg.notifyFns {
 					fn(nil, err)
 				}
 			}
 		case err := <-cfg.watcher.Errors:
-			cfg.logger.Errorf("dynamictls: watch error: %v", err)
+			cfg.log.Error(err, "Watch failure")
 		case <-cfg.close:
 			return
 		}

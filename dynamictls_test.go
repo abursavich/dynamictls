@@ -182,7 +182,7 @@ func TestOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			c, err := NewConfig(append(tt.options, WithErrorLogger(t))...)
+			c, err := NewConfig(append(tt.options, WithLogger(tlstest.Logr(t)))...)
 			if err != nil {
 				if tt.err {
 					return // error is expected
@@ -411,7 +411,7 @@ func TestMTLS(t *testing.T) {
 		),
 		WithRootCAs(caFile),
 		WithClientCAs(caFile),
-		WithErrorLogger(t),
+		WithLogger(tlstest.Logr(t)),
 		WithHTTP(),
 	)
 	check(t, "Failed to create server TLS config", err)
@@ -435,7 +435,7 @@ func TestMTLS(t *testing.T) {
 			createFile(t, dir, "client.key", clientKeyPEM),
 		),
 		WithRootCAs(caFile),
-		WithErrorLogger(t),
+		WithLogger(tlstest.Logr(t)),
 		WithHTTP(),
 	)
 	check(t, "Failed to create client TLS config", err)
@@ -491,7 +491,7 @@ func TestListenError(t *testing.T) {
 		WithHTTP2(),
 		WithCertificate(certFile, keyFile),
 		WithRootCAs(certFile),
-		WithErrorLogger(t),
+		WithLogger(tlstest.Logr(t)),
 	)
 	check(t, "Failed to create dynamic TLS config", err)
 	defer cfg.Close()
@@ -520,7 +520,7 @@ func TestDialErrors(t *testing.T) {
 		}),
 		WithHTTP2(),
 		WithRootCAs(caFile),
-		WithErrorLogger(t),
+		WithLogger(tlstest.Logr(t)),
 	)
 	check(t, "Failed to create dynamic TLS config", err)
 	defer cfg.Close()

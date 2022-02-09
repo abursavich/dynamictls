@@ -18,8 +18,18 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"testing"
 	"time"
+
+	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 )
+
+func Logr(t *testing.T) logr.Logger {
+	// TODO: Differentiate between info and error logs.
+	// This is sufficient for now, because we only use error.
+	return funcr.New(func(prefix, args string) { t.Error(prefix, args) }, funcr.Options{})
+}
 
 // CertOptions are certificate options.
 type CertOptions struct {

@@ -286,7 +286,7 @@ func TestExpiration(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			m, err := NewMetrics(WithErrorLogger(t))
+			m, err := NewMetrics(WithLogger(tlstest.Logr(t)))
 			check(t, "Failed to create metrics", err)
 			m.Update(tt.config, nil)
 			got := readGauge(t, m.expiration)

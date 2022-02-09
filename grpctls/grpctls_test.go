@@ -42,7 +42,7 @@ func TestInvalidConfig(t *testing.T) {
 			CipherSuites: []uint16{tls.TLS_RSA_WITH_RC4_128_SHA},
 		}),
 		dynamictls.WithClientCAs(caFile),
-		dynamictls.WithErrorLogger(t),
+		dynamictls.WithLogger(tlstest.Logr(t)),
 	)
 	check(t, "Failed to create dynamic TLS config", err)
 	defer cfg.Close()
@@ -84,7 +84,7 @@ func TestHandshakeErrors(t *testing.T) {
 		dynamictls.WithHTTP2(),
 		dynamictls.WithCertificate(certFile, keyFile),
 		dynamictls.WithRootCAs(caFile),
-		dynamictls.WithErrorLogger(t),
+		dynamictls.WithLogger(tlstest.Logr(t)),
 	)
 	check(t, "Failed to create dynamic TLS config", err)
 	defer cfg.Close()
@@ -170,7 +170,7 @@ func TestGRPC(t *testing.T) {
 		),
 		dynamictls.WithRootCAs(caFile),
 		dynamictls.WithClientCAs(caFile),
-		dynamictls.WithErrorLogger(t),
+		dynamictls.WithLogger(tlstest.Logr(t)),
 	)
 	check(t, "Failed to create server TLS config", err)
 	defer serverCfg.Close()
@@ -207,7 +207,7 @@ func TestGRPC(t *testing.T) {
 			createFile(t, dir, "client.key", clientKeyPEM),
 		),
 		dynamictls.WithRootCAs(caFile),
-		dynamictls.WithErrorLogger(t),
+		dynamictls.WithLogger(tlstest.Logr(t)),
 	)
 	check(t, "Failed to create client TLS config", err)
 	defer clientCfg.Close()
