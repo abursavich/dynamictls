@@ -4,6 +4,7 @@
 // Use of this source code is governed by The MIT License
 // which can be found in the LICENSE file.
 
+//go:build go1.14
 // +build go1.14
 
 package dynamictls_test
@@ -19,15 +20,15 @@ import (
 )
 
 func ExampleConfig_Listen() {
-	metrics, err := tlsprom.NewMetrics(
+	observer, err := tlsprom.NewObserver(
 		tlsprom.WithHTTP(),
 		tlsprom.WithServer(),
 	)
 	check(err)
-	prometheus.MustRegister(metrics)
+	prometheus.MustRegister(observer)
 
 	cfg, err := dynamictls.NewConfig(
-		dynamictls.WithNotifyFunc(metrics.Update),
+		dynamictls.WithObserver(observer),
 		dynamictls.WithCertificate(primaryCertFile, primaryKeyFile),
 		dynamictls.WithCertificate(secondaryCertFile, secondaryKeyFile),
 		dynamictls.WithRootCAs(caFile),
@@ -42,15 +43,15 @@ func ExampleConfig_Listen() {
 }
 
 func ExampleConfig_Dial() {
-	metrics, err := tlsprom.NewMetrics(
+	observer, err := tlsprom.NewObserver(
 		tlsprom.WithHTTP(),
 		tlsprom.WithClient(),
 	)
 	check(err)
-	prometheus.MustRegister(metrics)
+	prometheus.MustRegister(observer)
 
 	cfg, err := dynamictls.NewConfig(
-		dynamictls.WithNotifyFunc(metrics.Update),
+		dynamictls.WithObserver(observer),
 		dynamictls.WithBase(&tls.Config{
 			MinVersion: tls.VersionTLS12,
 		}),

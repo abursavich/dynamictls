@@ -1,4 +1,5 @@
 # DynamicTLS
+
 [![License](https://img.shields.io/badge/license-mit-blue.svg?style=for-the-badge)](https://raw.githubusercontent.com/abursavich/dynamictls/master/LICENSE)
 [![GoDev Reference](https://img.shields.io/static/v1?logo=go&logoColor=white&color=00ADD8&label=dev&message=reference&style=for-the-badge)](https://pkg.go.dev/bursavich.dev/dynamictls)
 [![Go Report Card](https://goreportcard.com/badge/bursavich.dev/dynamictls?style=for-the-badge)](https://goreportcard.com/report/bursavich.dev/dynamictls)
@@ -15,16 +16,16 @@ It provides simple integrations with HTTP/1.1, HTTP/2, gRPC, and Prometheus.
 
 ```go
 // create metrics
-metrics, err := tlsprom.NewMetrics(
+observer, err := tlsprom.NewObserver(
     tlsprom.WithHTTP(),
     tlsprom.WithServer(),
 )
 check(err)
-prometheus.MustRegister(metrics)
+prometheus.MustRegister(observer)
 
 // create TLS config
 cfg, err := dynamictls.NewConfig(
-    dynamictls.WithNotifyFunc(metrics.Update),
+    dynamictls.WithObserver(observer),
     dynamictls.WithCertificate(primaryCertFile, primaryKeyFile),
     dynamictls.WithCertificate(secondaryCertFile, secondaryKeyFile),
     dynamictls.WithRootCAs(caFile),
@@ -43,16 +44,16 @@ check(http.Serve(lis, http.DefaultServeMux))
 
 ```go
 // create metrics
-metrics, err := tlsprom.NewMetrics(
+observer, err := tlsprom.NewObserver(
     tlsprom.WithHTTP(),
     tlsprom.WithClient(),
 )
 check(err)
-prometheus.MustRegister(metrics)
+prometheus.MustRegister(observer)
 
 // create TLS config
 cfg, err := dynamictls.NewConfig(
-    dynamictls.WithNotifyFunc(metrics.Update),
+    dynamictls.WithObserver(observer),
     dynamictls.WithBase(&tls.Config{
         MinVersion: tls.VersionTLS12,
     }),
@@ -77,16 +78,16 @@ defer client.CloseIdleConnections()
 
 ```go
 // create metrics
-metrics, err := tlsprom.NewMetrics(
+observer, err := tlsprom.NewObserver(
     tlsprom.WithGRPC(),
     tlsprom.WithServer(),
 )
 check(err)
-prometheus.MustRegister(metrics)
+prometheus.MustRegister(observer)
 
 // create TLS config
 cfg, err := dynamictls.NewConfig(
-    dynamictls.WithNotifyFunc(metrics.Update),
+    dynamictls.WithObserver(observer),
     dynamictls.WithBase(&tls.Config{
         ClientAuth: tls.RequireAndVerifyClientCert,
         MinVersion: tls.VersionTLS13,
@@ -115,16 +116,16 @@ check(srv.Serve(lis))
 
 ```go
 // create metrics
-metrics, err := tlsprom.NewMetrics(
+observer, err := tlsprom.NewObserver(
     tlsprom.WithGRPC(),
     tlsprom.WithClient(),
 )
 check(err)
-prometheus.MustRegister(metrics)
+prometheus.MustRegister(observer)
 
 // create TLS config
 cfg, err := dynamictls.NewConfig(
-    dynamictls.WithNotifyFunc(metrics.Update),
+    dynamictls.WithObserver(observer),
     dynamictls.WithBase(&tls.Config{
         MinVersion: tls.VersionTLS13,
     }),

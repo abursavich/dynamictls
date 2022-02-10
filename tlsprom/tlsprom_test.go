@@ -19,7 +19,7 @@ import (
 )
 
 func TestCollector(t *testing.T) {
-	m, err := NewMetrics()
+	m, err := NewObserver()
 	check(t, "Failed to create metrics", err)
 	reg := prometheus.NewRegistry()
 	check(t, "Failed to register metrics", reg.Register(m))
@@ -90,12 +90,13 @@ func TestMetricNames(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			m, err := NewMetrics(tt.options...)
+			m, err := NewObserver(tt.options...)
 			check(t, "Failed to create metrics", err)
+			o := m.(*observer)
 			for baseName, metric := range map[string]*gauge{
-				updateErrorName: readGauge(t, m.updateError),
-				verifyErrorName: readGauge(t, m.verifyError),
-				expirationName:  readGauge(t, m.expiration),
+				updateErrorName: readGauge(t, o.updateError),
+				verifyErrorName: readGauge(t, o.verifyError),
+				expirationName:  readGauge(t, o.expiration),
 			} {
 				got := metric.name
 				want := tt.namespace + "_" + tt.subsystem + "_" + baseName
@@ -108,22 +109,23 @@ func TestMetricNames(t *testing.T) {
 }
 
 func TestUpdateError(t *testing.T) {
-	m, err := NewMetrics()
+	m, err := NewObserver()
 	check(t, "Failed to create metrics", err)
+	o := m.(*observer)
 
-	metric := readGauge(t, m.updateError)
+	metric := readGauge(t, o.updateError)
 	if got, want := metric.value, float64(0); got != want {
 		t.Fatalf("Unexpected %s value: got: %v; want: %v", metric.name, metric.value, want)
 	}
 
-	m.Update(nil, fmt.Errorf("testing"))
-	metric = readGauge(t, m.updateError)
+	o.ObserveReadError(fmt.Errorf("testing"))
+	metric = readGauge(t, o.updateError)
 	if got, want := metric.value, float64(1); got != want {
 		t.Fatalf("Unexpected %s value: got: %v; want: %v", metric.name, metric.value, want)
 	}
 
-	m.Update(&tls.Config{}, nil)
-	metric = readGauge(t, m.updateError)
+	o.ObserveConfig(&tls.Config{})
+	metric = readGauge(t, o.updateError)
 	if got, want := metric.value, float64(0); got != want {
 		t.Fatalf("Unexpected %s value: got: %v; want: %v", metric.name, metric.value, want)
 	}
@@ -200,10 +202,11 @@ func TestValidation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			m, err := NewMetrics(tt.options...)
+			m, err := NewObserver(tt.options...)
 			check(t, "Failed to create metrics", err)
-			m.Update(tt.config, nil)
-			got := readGauge(t, m.verifyError)
+			o := m.(*observer)
+			o.ObserveConfig(tt.config)
+			got := readGauge(t, o.verifyError)
 			want := float64(0)
 			if tt.invalid {
 				want = 1
@@ -286,10 +289,11 @@ func TestExpiration(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			m, err := NewMetrics(WithLogger(tlstest.Logr(t)))
+			m, err := NewObserver(WithLogger(tlstest.Logr(t)))
 			check(t, "Failed to create metrics", err)
-			m.Update(tt.config, nil)
-			got := readGauge(t, m.expiration)
+			o := m.(*observer)
+			o.ObserveConfig(tt.config)
+			got := readGauge(t, o.expiration)
 			want := float64(tt.expiry.Unix())
 			if got.value != want {
 				t.Fatalf("Unexpected %s value: got: %v; want: %v", got.name, got.value, want)

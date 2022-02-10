@@ -27,9 +27,16 @@ import (
 
 const hashSize = 16 // 128-bit
 
-// NotifyFunc is a function that is called when new config data
-// is loaded or an error occurs loading new config data.
-type NotifyFunc func(cfg *tls.Config, err error)
+// An Observer observes when new config data is loaded or an error occurs loading new config data.
+type Observer interface {
+	ObserveConfig(cfg *tls.Config)
+	ObserveReadError(err error)
+}
+
+type noopObserver struct{}
+
+func (noopObserver) ObserveConfig(cfg *tls.Config) {}
+func (noopObserver) ObserveReadError(err error)    {}
 
 // An Option applies optional configuration.
 type Option interface {
@@ -110,10 +117,10 @@ func WithCertificate(certFile, keyFile string) Option {
 	})
 }
 
-// WithNotifyFunc returns an Option that registers the notify function.
-func WithNotifyFunc(notify NotifyFunc) Option {
+// WithObserver returns an Option that registers the Observer.
+func WithObserver(observer Observer) Option {
 	return optionFunc(func(c *Config) error {
-		c.notifyFns = append(c.notifyFns, notify)
+		c.observer = observer
 		return nil
 	})
 }
@@ -183,7 +190,7 @@ type Config struct {
 	rootCAs   []string
 	clientCAs []string
 	certs     []keyPair
-	notifyFns []NotifyFunc
+	observer  Observer
 	log       logr.Logger
 
 	watcher *fsnotify.Watcher
@@ -207,6 +214,7 @@ func NewConfig(options ...Option) (cfg *Config, err error) {
 	}()
 	cfg = &Config{
 		base:     &tls.Config{},
+		observer: noopObserver{},
 		log:      logr.Discard(),
 		watcher:  w,
 		close:    make(chan struct{}),
@@ -322,9 +330,7 @@ func (cfg *Config) read() error {
 	}
 
 	cfg.latest.Store(config)
-	for _, fn := range cfg.notifyFns {
-		fn(config, nil)
-	}
+	cfg.observer.ObserveConfig(config)
 	return nil
 }
 
@@ -337,9 +343,7 @@ func (cfg *Config) watch() {
 			// TODO: ignore unrelated events
 			if err := cfg.read(); err != nil {
 				cfg.log.Error(err, "Read failure") // errors already decorated
-				for _, fn := range cfg.notifyFns {
-					fn(nil, err)
-				}
+				cfg.observer.ObserveReadError(err)
 			}
 		case err := <-cfg.watcher.Errors:
 			cfg.log.Error(err, "Watch failure")

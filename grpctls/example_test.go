@@ -21,13 +21,13 @@ import (
 
 func Example() {
 	// create shared metrics
-	metrics, err := tlsprom.NewMetrics(tlsprom.WithGRPC())
+	observer, err := tlsprom.NewObserver(tlsprom.WithGRPC())
 	check(err)
-	prometheus.MustRegister(metrics)
+	prometheus.MustRegister(observer)
 
 	// create shared TLS config
 	cfg, err := dynamictls.NewConfig(
-		dynamictls.WithNotifyFunc(metrics.Update),
+		dynamictls.WithObserver(observer),
 		dynamictls.WithBase(&tls.Config{
 			ClientAuth: tls.RequireAndVerifyClientCert,
 			MinVersion: tls.VersionTLS13,
@@ -65,16 +65,16 @@ func Example() {
 
 func Example_client() {
 	// create metrics
-	metrics, err := tlsprom.NewMetrics(
+	observer, err := tlsprom.NewObserver(
 		tlsprom.WithGRPC(),
 		tlsprom.WithClient(),
 	)
 	check(err)
-	prometheus.MustRegister(metrics)
+	prometheus.MustRegister(observer)
 
 	// create TLS config
 	cfg, err := dynamictls.NewConfig(
-		dynamictls.WithNotifyFunc(metrics.Update),
+		dynamictls.WithObserver(observer),
 		dynamictls.WithBase(&tls.Config{
 			MinVersion: tls.VersionTLS13,
 		}),
@@ -103,16 +103,16 @@ func Example_client() {
 
 func Example_server() {
 	// create metrics
-	metrics, err := tlsprom.NewMetrics(
+	observer, err := tlsprom.NewObserver(
 		tlsprom.WithGRPC(),
 		tlsprom.WithServer(),
 	)
 	check(err)
-	prometheus.MustRegister(metrics)
+	prometheus.MustRegister(observer)
 
 	// create TLS config
 	cfg, err := dynamictls.NewConfig(
-		dynamictls.WithNotifyFunc(metrics.Update),
+		dynamictls.WithObserver(observer),
 		dynamictls.WithBase(&tls.Config{
 			ClientAuth: tls.RequireAndVerifyClientCert,
 			MinVersion: tls.VersionTLS13,

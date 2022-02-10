@@ -13,6 +13,7 @@ import (
 	"sort"
 	"time"
 
+	"bursavich.dev/dynamictls"
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -137,8 +138,13 @@ func WithKeyUsages(usages ...x509.ExtKeyUsage) Option {
 	})
 }
 
-// Metrics is a collection of TLS config metrics.
-type Metrics struct {
+// Observer is a collection of TLS config metrics.
+type Observer interface {
+	dynamictls.Observer
+	prometheus.Collector
+}
+
+type observer struct {
 	updateError prometheus.Gauge
 	verifyError prometheus.Gauge
 	expiration  prometheus.Gauge
@@ -147,8 +153,8 @@ type Metrics struct {
 	log    logr.Logger
 }
 
-// NewMetrics returns new Metrics with the given options.
-func NewMetrics(options ...Option) (*Metrics, error) {
+// NewObserver returns a new Observer with the given options.
+func NewObserver(options ...Option) (Observer, error) {
 	cfg := &config{
 		usages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 		log:    logr.Discard(),
@@ -158,7 +164,7 @@ func NewMetrics(options ...Option) (*Metrics, error) {
 			return nil, err
 		}
 	}
-	m := &Metrics{
+	o := &observer{
 		updateError: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: cfg.namespace,
 			Subsystem: cfg.subsystem,
@@ -180,59 +186,59 @@ func NewMetrics(options ...Option) (*Metrics, error) {
 		usages: cfg.usages,
 		log:    cfg.log,
 	}
-	return m, nil
+	return o, nil
 }
 
 // Describe sends the super-set of all possible descriptors of metrics
 // to the provided channel and returns once the last descriptor has been sent.
-func (m *Metrics) Describe(ch chan<- *prometheus.Desc) {
-	m.updateError.Describe(ch)
-	m.verifyError.Describe(ch)
-	m.expiration.Describe(ch)
+func (o *observer) Describe(ch chan<- *prometheus.Desc) {
+	o.updateError.Describe(ch)
+	o.verifyError.Describe(ch)
+	o.expiration.Describe(ch)
 }
 
 // Collect sends each collected metric via the provided channel
 // and returns once the last metric has been sent.
-func (m *Metrics) Collect(ch chan<- prometheus.Metric) {
-	m.updateError.Collect(ch)
-	m.verifyError.Collect(ch)
-	m.expiration.Collect(ch)
+func (o *observer) Collect(ch chan<- prometheus.Metric) {
+	o.updateError.Collect(ch)
+	o.verifyError.Collect(ch)
+	o.expiration.Collect(ch)
 }
 
-// Update updates the metrics with the new TLS config or error.
-func (m *Metrics) Update(cfg *tls.Config, err error) {
-	if err != nil {
-		m.updateError.Set(1)
-		return
-	}
-	m.updateError.Set(0)
+func (o *observer) ObserveConfig(cfg *tls.Config) {
+	o.updateError.Set(0)
 
-	t, err := m.earliestExpiration(cfg)
+	t, err := o.earliestExpiration(cfg)
 	if err != nil || t.IsZero() {
-		m.verifyError.Set(1)
+		o.verifyError.Set(1)
+		o.expiration.Set(0)
 		return
 	}
-	m.verifyError.Set(0)
-	m.expiration.Set(float64(t.Unix()))
+	o.verifyError.Set(0)
+	o.expiration.Set(float64(t.Unix()))
 }
 
-func (m *Metrics) earliestExpiration(cfg *tls.Config) (time.Time, error) {
+func (o *observer) ObserveReadError(err error) {
+	o.updateError.Set(1)
+}
+
+func (o *observer) earliestExpiration(cfg *tls.Config) (time.Time, error) {
 	var t time.Time
 	for _, cert := range cfg.Certificates {
 		x509Cert := cert.Leaf
 		if x509Cert == nil {
 			var err error
 			if x509Cert, err = x509.ParseCertificate(cert.Certificate[0]); err != nil {
-				m.log.Error(err, "Failed to parse TLS certificate")
+				o.log.Error(err, "Failed to parse TLS certificate")
 				return time.Time{}, err
 			}
 		}
 		chains, err := x509Cert.Verify(x509.VerifyOptions{
 			Roots:     cfg.RootCAs,
-			KeyUsages: m.usages,
+			KeyUsages: o.usages,
 		})
 		if err != nil {
-			m.log.Error(err, "Failed to validate TLS certificate")
+			o.log.Error(err, "Failed to validate TLS certificate")
 			return time.Time{}, err
 		}
 		for _, chain := range chains {
@@ -244,7 +250,7 @@ func (m *Metrics) earliestExpiration(cfg *tls.Config) (time.Time, error) {
 		}
 	}
 	if t.IsZero() {
-		m.log.Error(nil, "Failed to find a certificate in the TLS config")
+		o.log.Error(nil, "Failed to find a certificate in the TLS config")
 	}
 	return t, nil
 }

@@ -221,6 +221,36 @@ func certPoolEqual(x, y *x509.CertPool) bool {
 	return reflect.DeepEqual(xs, ys)
 }
 
+type testObserver struct {
+	configCh chan *tls.Config
+	errCh    chan error
+}
+
+func newTestObserver() *testObserver {
+	return &testObserver{
+		configCh: make(chan *tls.Config, 1),
+		errCh:    make(chan error, 1),
+	}
+}
+
+func (o *testObserver) ObserveConfig(cfg *tls.Config) {
+	timeout := time.NewTimer(10 * time.Second)
+	defer timeout.Stop()
+	select {
+	case <-timeout.C:
+	case o.configCh <- cfg:
+	}
+}
+
+func (o *testObserver) ObserveReadError(err error) {
+	timeout := time.NewTimer(10 * time.Second)
+	defer timeout.Stop()
+	select {
+	case <-timeout.C:
+	case o.errCh <- err:
+	}
+}
+
 func TestNotifyError(t *testing.T) {
 	// create temp dir
 	dir, err := ioutil.TempDir("", "")
@@ -234,10 +264,10 @@ func TestNotifyError(t *testing.T) {
 	keyFile := createFile(t, dir, "key.pem", keyPEMBlock)
 
 	// create config
-	errCh := make(chan error, 1)
+	obs := newTestObserver()
 	cfg, err := NewConfig(
 		WithCertificate(certFile, keyFile),
-		WithNotifyFunc(func(_ *tls.Config, err error) { errCh <- err }),
+		WithObserver(obs),
 	)
 	check(t, "Failed to initialize config", err)
 	defer cfg.Close()
@@ -246,7 +276,11 @@ func TestNotifyError(t *testing.T) {
 	defer timeout.Stop()
 
 	select {
-	case err := <-errCh:
+	case cfg := <-obs.configCh:
+		if cfg == nil {
+			t.Fatalf("Unexpected nil config")
+		}
+	case err := <-obs.errCh:
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -257,7 +291,11 @@ func TestNotifyError(t *testing.T) {
 	check(t, "Failed to remove cert file", os.Remove(certFile))
 
 	select {
-	case err := <-errCh:
+	case cfg := <-obs.configCh:
+		if cfg != nil {
+			t.Fatalf("Unexpected config")
+		}
+	case err := <-obs.errCh:
 		if err == nil {
 			t.Fatal("Expected an error after deleting certs")
 		}
@@ -307,14 +345,7 @@ func TestKubernetes(t *testing.T) {
 	check(t, "Failed to create symlink", os.Symlink(data0, data))
 
 	// create config
-	ch := make(chan result, 1)
-	notifyFn := func(config *tls.Config, err error) {
-		select {
-		case <-ch:
-		default:
-		}
-		ch <- result{config: config, err: err}
-	}
+	obs := newTestObserver()
 	wantCert := func(want *tls.Certificate) {
 		t.Helper()
 		timeout := time.NewTimer(5 * time.Second)
@@ -322,23 +353,21 @@ func TestKubernetes(t *testing.T) {
 		var err error
 		for {
 			select {
-			case res := <-ch:
-				if res.err != nil {
-					// An error can occur if a filesystem event triggers a reload and a
-					// symlink flip happens between reading the public and private keys.
-					// The keys won't match due to this race, but a subsequent reload
-					// will also be triggered and they will match the next time.
-					t.Logf("Unexpected error, may be transient: %v", res.err)
-					err = res.err
-					continue
-				}
-				if res.config == nil {
+			case err = <-obs.errCh:
+				// An error can occur if a filesystem event triggers a reload and a
+				// symlink flip happens between reading the public and private keys.
+				// The keys won't match due to this race, but a subsequent reload
+				// will also be triggered and they will match the next time.
+				t.Logf("Unexpected error, may be transient: %v", err)
+				continue
+			case cfg := <-obs.configCh:
+				if cfg == nil {
 					t.Fatal("Config missing")
 				}
-				if len(res.config.Certificates) == 0 {
+				if len(cfg.Certificates) == 0 {
 					t.Fatal("Config missing certs")
 				}
-				got := res.config.Certificates[0]
+				got := cfg.Certificates[0]
 				if !reflect.DeepEqual(got.Certificate, want.Certificate) {
 					t.Fatal("Unexpected cert")
 				}
@@ -358,7 +387,7 @@ func TestKubernetes(t *testing.T) {
 	cfg, err := NewConfig(
 		WithCertificate(certFile, keyFile),
 		WithRootCAs(caFile),
-		WithNotifyFunc(notifyFn),
+		WithObserver(obs),
 	)
 	check(t, "Failed to initialize config", err)
 	defer cfg.Close()
