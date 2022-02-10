@@ -213,8 +213,8 @@ func TestGRPC(t *testing.T) {
 	defer clientCfg.Close()
 	clientCreds, err := NewCredentials(clientCfg)
 	check(t, "Failed to create client gRPC credentials", err)
-	check(t, "Failed to override server name", clientCreds.OverrideServerName("foobar"))
 	conn, err := grpc.Dial("localhost:"+port,
+		grpc.WithAuthority("foobar"),
 		grpc.WithTransportCredentials(clientCreds),
 		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
 	)
