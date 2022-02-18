@@ -311,11 +311,6 @@ func TestKubernetes(t *testing.T) {
 	// See AtomicWriter for details of secret update algorithm used by kubelet:
 	// https://godoc.org/k8s.io/kubernetes/pkg/volume/util#AtomicWriter.Write
 
-	type result struct {
-		config *tls.Config
-		err    error
-	}
-
 	ca, caCertPEMBlock, _, err := tlstest.GenerateCert(nil)
 	check(t, "Failed to create CA", err)
 	cert0, certPEMBlock0, keyPEMBlock0, err := tlstest.GenerateCert(&tlstest.CertOptions{Parent: ca})
