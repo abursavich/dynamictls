@@ -14,8 +14,8 @@ import (
 	"fmt"
 	"hash"
 	"hash/fnv"
-	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 	"sort"
 	"sync/atomic"
@@ -356,11 +356,11 @@ func (cfg *Config) watch() {
 func readCerts(h hash.Hash, pairs []keyPair) ([]tls.Certificate, error) {
 	var certs []tls.Certificate
 	for _, pair := range pairs {
-		certPEMBlock, err := ioutil.ReadFile(pair.certFile)
+		certPEMBlock, err := os.ReadFile(pair.certFile)
 		if err != nil {
 			return nil, fmt.Errorf("dynamictls: cert read error: %w", err)
 		}
-		keyPEMBlock, err := ioutil.ReadFile(pair.keyFile)
+		keyPEMBlock, err := os.ReadFile(pair.keyFile)
 		if err != nil {
 			return nil, fmt.Errorf("dynamictls: key read error: %w", err)
 		}
@@ -382,7 +382,7 @@ func readCAs(h hash.Hash, files []string) (*x509.CertPool, error) {
 	}
 	pool := x509.NewCertPool()
 	for _, file := range files {
-		caPEMCerts, err := ioutil.ReadFile(file)
+		caPEMCerts, err := os.ReadFile(file)
 		if err != nil {
 			return nil, fmt.Errorf("dynamictls: certificate authorities read error: %w", err)
 		}

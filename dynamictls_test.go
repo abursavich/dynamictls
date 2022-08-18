@@ -12,7 +12,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -27,7 +26,7 @@ import (
 
 func TestOptions(t *testing.T) {
 	// create temp dir
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	check(t, "Failed to create directory", err)
 	defer os.RemoveAll(dir)
 
@@ -253,7 +252,7 @@ func (o *testObserver) ObserveReadError(err error) {
 
 func TestNotifyError(t *testing.T) {
 	// create temp dir
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	check(t, "Failed to create directory", err)
 	defer os.RemoveAll(dir)
 
@@ -318,7 +317,7 @@ func TestKubernetes(t *testing.T) {
 	cert1, certPEMBlock1, keyPEMBlock1, err := tlstest.GenerateCert(&tlstest.CertOptions{Parent: ca})
 	check(t, "Failed to create certificate", err)
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	check(t, "Failed to create directory", err)
 	defer os.RemoveAll(dir)
 
@@ -403,7 +402,7 @@ func TestKubernetes(t *testing.T) {
 
 func TestMTLS(t *testing.T) {
 	// create temp dir
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	check(t, "Failed to create directory", err)
 	defer os.RemoveAll(dir)
 
@@ -488,7 +487,7 @@ func TestMTLS(t *testing.T) {
 	check(t, "Failed to get listen port", err)
 	resp, err := client.Get("https://localhost:" + port)
 	check(t, "Failed HTTP request", err)
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	check(t, "Failed reading HTTP response body", err)
 	if got := string(buf); got != msg {
 		t.Fatalf("Unexpected response; want: %q; got: %q", msg, got)
@@ -497,7 +496,7 @@ func TestMTLS(t *testing.T) {
 
 func TestListenError(t *testing.T) {
 	// create temp dir
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	check(t, "Failed to create directory", err)
 	defer os.RemoveAll(dir)
 
@@ -528,7 +527,7 @@ func TestListenError(t *testing.T) {
 
 func TestDialErrors(t *testing.T) {
 	// create temp dir
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	check(t, "Failed to create directory", err)
 	defer os.RemoveAll(dir)
 
@@ -589,7 +588,7 @@ func createDir(t *testing.T, dir string, files map[string][]byte) {
 func createFile(t *testing.T, dir, base string, buf []byte) string {
 	t.Helper()
 	path := filepath.Join(dir, base)
-	check(t, "Failed to write file", ioutil.WriteFile(path, buf, os.ModePerm))
+	check(t, "Failed to write file", os.WriteFile(path, buf, os.ModePerm))
 	return path
 }
 

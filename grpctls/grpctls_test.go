@@ -11,7 +11,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -27,7 +26,7 @@ import (
 
 func TestInvalidConfig(t *testing.T) {
 	// create temp dir
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	check(t, "Failed to create directory", err)
 	defer os.RemoveAll(dir)
 
@@ -54,7 +53,7 @@ func TestInvalidConfig(t *testing.T) {
 
 func TestHandshakeErrors(t *testing.T) {
 	// create temp dir
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	check(t, "Failed to create directory", err)
 	defer os.RemoveAll(dir)
 
@@ -138,7 +137,7 @@ func (errConn) SetWriteDeadline(t time.Time) error { return nil }
 
 func TestGRPC(t *testing.T) {
 	// create temp dir
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	check(t, "Failed to create directory", err)
 	defer os.RemoveAll(dir)
 
@@ -240,7 +239,7 @@ func (*testServer) UnaryCall(ctx context.Context, req *pb.SimpleRequest) (*pb.Si
 func createFile(t *testing.T, dir, base string, buf []byte) string {
 	t.Helper()
 	path := filepath.Join(dir, base)
-	check(t, "Failed to write file", ioutil.WriteFile(path, buf, os.ModePerm))
+	check(t, "Failed to write file", os.WriteFile(path, buf, os.ModePerm))
 	return path
 }
 
