@@ -21,8 +21,8 @@ import (
 	"sync/atomic"
 
 	"bursavich.dev/dynamictls/internal/forked/go/http2"
+	"github.com/fsnotify/fsnotify"
 	"github.com/go-logr/logr"
-	fsnotify "gopkg.in/fsnotify.v1"
 )
 
 const hashSize = 16 // 128-bit
