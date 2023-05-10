@@ -21,7 +21,7 @@ import (
 	"bursavich.dev/dynamictls/internal/tlstest"
 	"google.golang.org/grpc"
 
-	pb "google.golang.org/grpc/test/grpc_testing"
+	pb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 func TestInvalidConfig(t *testing.T) {

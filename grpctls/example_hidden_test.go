@@ -10,7 +10,7 @@ import (
 	"context"
 	"log"
 
-	pb "google.golang.org/grpc/test/grpc_testing"
+	pb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var (

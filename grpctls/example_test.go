@@ -16,7 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 
-	pb "google.golang.org/grpc/test/grpc_testing"
+	pb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 func Example() {
